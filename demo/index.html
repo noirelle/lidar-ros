@@ -150,9 +150,13 @@
 
         <div class="telemetry-card">
             <h3>Diagnostic</h3>
-            <div class="data-row">
-                <span class="data-label">Link</span>
-                <span class="data-value" id="conn-text">DISCONNECTED</span>
+            <div class="telemetry-card">
+                <div class="tel-label">Link Status</div>
+                <div class="tel-value" id="conn-text">DISCONNECTED</div>
+            </div>
+            <div class="telemetry-card">
+                <div class="tel-label">Data Heartbeat</div>
+                <div class="tel-value" id="data-pulse">--</div>
             </div>
             <div class="data-row">
                 <span class="data-label">State</span>
@@ -219,6 +223,7 @@
 
         const connText = document.getElementById('conn-text');
         const sysState = document.getElementById('sys-state');
+        const dataPulse = document.getElementById('data-pulse');
 
         ros.on('connection', () => {
             connText.innerText = 'CONNECTED';
@@ -347,9 +352,10 @@
         // --- SLAM Tracking ---
         const tfClient = new ROSLIB.TFClient({
             ros: ros,
-            fixedFrame: 'map',
-            angularThres: 0.01,
-            transThres: 0.01
+            fixedFrame: 'map', // Try without slash
+            angularThres: 0.001,
+            transThres: 0.001,
+            rate: 10.0
         });
 
         tfClient.subscribe('base_link', (tf) => {
@@ -369,18 +375,34 @@
         const poseTopic = new ROSLIB.Topic({ 
             ros: ros, 
             name: '/slam_toolbox/pose', 
-            messageType: 'geometry_msgs/PoseWithCovarianceStamped' 
+            messageType: 'geometry_msgs/msg/PoseWithCovarianceStamped' 
         });
         poseTopic.subscribe(msg => {
+            if (!msg || !msg.pose) return;
+            const now = new Date();
+            dataPulse.innerText = now.toLocaleTimeString() + ' [RECV]';
+
             const pose = msg.pose.pose;
             const px = pose.position.x;
             const py = pose.position.y;
             const q = pose.orientation;
+            
+            // Yaw Calculation
             const yaw = Math.atan2(2 * (q.w * q.z + q.x * q.y), 1 - 2 * (q.y * q.y + q.z * q.z));
             
             document.getElementById('pose-x').innerText = px.toFixed(3);
             document.getElementById('pose-y').innerText = py.toFixed(3);
             document.getElementById('pose-yaw').innerText = (yaw * 180 / Math.PI).toFixed(2);
+            
+            // Sync current pose for the grid/map
+            robotX = px;
+            robotY = py;
+            robotYaw = yaw;
+            centerX = px;
+            centerY = py;
+            
+            drawGrid();
+            renderMap();
         });
 
         // --- Mapping (Unified Point Cloud Style) ---

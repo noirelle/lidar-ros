@@ -61,7 +61,7 @@ def generate_launch_description():
         # 4. TF Web Republisher (Required for roslibjs TFClient)
         Node(
             package='tf2_web_republisher',
-            executable='tf2_web_republisher',
+            executable='tf2_web_republisher_node',
             name='tf2_web_republisher'
         ),
 

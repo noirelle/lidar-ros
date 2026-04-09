@@ -262,6 +262,8 @@
             Object.values(layers).forEach(c => {
                 c.width = container.clientWidth;
                 c.height = container.clientHeight;
+                const ctx = c.getContext('2d');
+                ctx.imageSmoothingEnabled = false; // Re-disable on resize
             });
             drawGrid();
         }
@@ -274,8 +276,8 @@
             const dx = (x - centerX) * scale;
             const dy = (y - centerY) * scale;
             return {
-                x: (layers.grid.width / 2) + dx,
-                y: (layers.grid.height / 2) - dy
+                x: Math.round((layers.grid.width / 2) + dx),
+                y: Math.round((layers.grid.height / 2) - dy)
             };
         }
 
@@ -389,6 +391,7 @@
             mapCanvas.width = info.width;
             mapCanvas.height = info.height;
             const mCtx = mapCanvas.getContext('2d');
+            mCtx.imageSmoothingEnabled = false; // Disable on data source
             const imgData = mCtx.createImageData(info.width, info.height);
 
             for(let i=0; i<data.length; i++) {
@@ -423,6 +426,7 @@
             const h = info.height * info.resolution * scale;
             
             ctx.save();
+            ctx.imageSmoothingEnabled = false; // Double-enforce before draw
             ctx.translate(p.x, p.y);
             ctx.scale(1, -1);
             ctx.globalAlpha = 1.0;

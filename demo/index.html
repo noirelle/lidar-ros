@@ -134,14 +134,21 @@
             letter-spacing: 1px;
         }
 
-        #status-dot {
-            display: none; /* Removed as requested */
+        .version-tag {
+            position: fixed;
+            top: 10px;
+            right: 170px;
+            font-family: monospace;
+            font-size: 0.7rem;
+            color: rgba(0,0,0,0.3);
         }
 
         #status-dot.online { background: var(--accent); }
     </style>
 </head>
 <body>
+
+    <div class="version-tag">UI_VER: 2.0.4 [STABLE]</div>
 
     <aside>
         <div class="logo">
@@ -161,6 +168,10 @@
             <div class="data-row">
                 <span class="data-label">Hz</span>
                 <span class="data-value" id="scan-hz">0.00</span>
+            </div>
+            <div class="data-row">
+                <span class="data-label">Pulse</span>
+                <span class="data-value" id="data-pulse">---</span>
             </div>
         </div>
 
@@ -219,6 +230,7 @@
 
         const connText = document.getElementById('conn-text');
         const sysState = document.getElementById('sys-state');
+        const dataPulse = document.getElementById('data-pulse');
 
         ros.on('connection', () => {
             connText.innerText = 'CONNECTED';
@@ -344,43 +356,41 @@
             drawUI();
         });
 
-        // --- SLAM Tracking ---
-        const tfClient = new ROSLIB.TFClient({
+        // --- High-Priority Raw TF Telemetry ---
+        const tfTopic = new ROSLIB.Topic({
             ros: ros,
-            fixedFrame: 'map',
-            angularThres: 0.01,
-            transThres: 0.01
+            name: '/tf',
+            messageType: 'tf2_msgs/msg/TFMessage'
         });
 
-        tfClient.subscribe('base_link', (tf) => {
-            robotX = tf.translation.x;
-            robotY = tf.translation.y;
-            const q = tf.rotation;
-            robotYaw = Math.atan2(2 * (q.w * q.z + q.x * q.y), 1 - 2 * (q.y * q.y + q.z * q.z));
-            
-            centerX = robotX;
-            centerY = robotY;
+        tfTopic.subscribe(msg => {
+            msg.transforms.forEach(transform => {
+                // We are looking for the 'map' -> 'odom' or 'map' -> 'base_link' jump
+                if (transform.header.frame_id === 'map' || transform.header.frame_id === '/map') {
+                    const now = new Date();
+                    dataPulse.innerText = now.toLocaleTimeString() + ' [TF_LIVE]';
 
-            drawGrid();
-            renderMap(); // Re-render map points on pose change
-        });
+                    const pos = transform.transform.translation;
+                    const rot = transform.transform.rotation;
+                    
+                    // Update global UI state
+                    robotX = pos.x;
+                    robotY = pos.y;
+                    const q = rot;
+                    robotYaw = Math.atan2(2 * (q.w * q.z + q.x * q.y), 1 - 2 * (q.y * q.y + q.z * q.z));
+                    
+                    centerX = robotX;
+                    centerY = robotY;
 
-        // --- Persistent Direct Pose Telemetry (Fallback/Direct) ---
-        const poseTopic = new ROSLIB.Topic({ 
-            ros: ros, 
-            name: '/slam_toolbox/pose', 
-            messageType: 'geometry_msgs/PoseWithCovarianceStamped' 
-        });
-        poseTopic.subscribe(msg => {
-            const pose = msg.pose.pose;
-            const px = pose.position.x;
-            const py = pose.position.y;
-            const q = pose.orientation;
-            const yaw = Math.atan2(2 * (q.w * q.z + q.x * q.y), 1 - 2 * (q.y * q.y + q.z * q.z));
-            
-            document.getElementById('pose-x').innerText = px.toFixed(3);
-            document.getElementById('pose-y').innerText = py.toFixed(3);
-            document.getElementById('pose-yaw').innerText = (yaw * 180 / Math.PI).toFixed(2);
+                    // Update DOM
+                    document.getElementById('pose-x').innerText = robotX.toFixed(3);
+                    document.getElementById('pose-y').innerText = robotY.toFixed(3);
+                    document.getElementById('pose-yaw').innerText = (robotYaw * 180 / Math.PI).toFixed(2);
+                    
+                    drawGrid();
+                    renderMap();
+                }
+            });
         });
 
         // --- Mapping (Unified Point Cloud Style) ---

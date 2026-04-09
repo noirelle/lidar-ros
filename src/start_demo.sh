@@ -9,11 +9,17 @@ BRIDGE_PID=$!
 
 # Check for real LIDAR driver in /app/src/
 if [ -d "/app/src/ydlidar_ros2_driver" ]; then
-    echo "YDLIDAR driver found in /app/src/ydlidar_ros2_driver. Building..."
+    echo "YDLIDAR driver found. Setting up workspace..."
+    rm -rf /app/ros2_ws
     mkdir -p /app/ros2_ws/src
     cp -r /app/src/ydlidar_ros2_driver /app/ros2_ws/src/
+    
+    echo "--- Debug: Workspace Structure ---"
+    ls -F /app/ros2_ws/src/ydlidar_ros2_driver/package.xml
+    echo "--- End Debug ---"
+    
     cd /app/ros2_ws
-    colcon build --symlink-install
+    colcon build --symlink-install --packages-select ydlidar_ros2_driver
     source /app/ros2_ws/install/setup.bash
     
     echo "Starting YDLIDAR X3 Pro Node (Hardware Mode)..."

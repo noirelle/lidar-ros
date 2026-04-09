@@ -44,16 +44,15 @@
         }
 
         .logo {
-            font-size: 1.2rem;
+            font-size: 1rem;
             font-weight: 900;
-            letter-spacing: 2px;
-            color: var(--accent);
-            display: flex;
-            align-items: center;
-            gap: 12px;
+            letter-spacing: 3px;
+            background: var(--accent);
+            color: var(--panel-bg);
+            padding: 8px 16px;
             text-transform: uppercase;
-            border-bottom: 2px solid var(--accent);
-            padding-bottom: 8px;
+            display: inline-block;
+            width: fit-content;
         }
 
         .telemetry-card {
@@ -136,13 +135,7 @@
         }
 
         #status-dot {
-            display: inline-block;
-            width: 8px;
-            height: 8px;
-            border-radius: 50%;
-            margin-right: 6px;
-            background: #e0e0e0;
-            border: 1px solid var(--accent);
+            display: none; /* Removed as requested */
         }
 
         #status-dot.online { background: var(--accent); }
@@ -213,7 +206,7 @@
         </div>
 
         <div class="hud-bottom">
-            <div><span id="status-dot"></span> <span id="conn-label">WS-LINK</span></div>
+            <div><span id="conn-label">WS-LINK</span></div>
             <div>COORDINATE_SYS: MAP_RELATIVE</div>
         </div>
     </main>

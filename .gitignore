@@ -1,6 +1,5 @@
 # Dependencies
 deps/
-bundles/
 
 # ROS 2 Build files (if built locally)
 build/

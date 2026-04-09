@@ -8,16 +8,23 @@ ros2 launch rosbridge_server rosbridge_websocket_launch.xml port:=9090 &
 BRIDGE_PID=$!
 
 # Check for real LIDAR driver in /app/src/
-if [ -d "/app/src/sllidar_ros2" ]; then
-    echo "Hardware driver found in /app/src/sllidar_ros2. Building..."
+if [ -d "/app/src/ydlidar_ros2_driver" ]; then
+    echo "YDLIDAR driver found in /app/src/ydlidar_ros2_driver. Building..."
     mkdir -p /app/ros2_ws/src
-    cp -r /app/src/sllidar_ros2 /app/ros2_ws/src/
+    cp -r /app/src/ydlidar_ros2_driver /app/ros2_ws/src/
     cd /app/ros2_ws
     colcon build --symlink-install
     source /app/ros2_ws/install/setup.bash
     
-    echo "Starting RPLIDAR A2 Node (Hardware Mode)..."
-    ros2 run sllidar_ros2 sllidar_node --ros-args -p serial_port:=/dev/ttyUSB0 -p serial_baudrate:=115200 -p frame_id:=base_scan -p angle_compensate:=true &
+    echo "Starting YDLIDAR X3 Pro Node (Hardware Mode)..."
+    # Port: /dev/ttyUSB0, Baudrate: 128000, Model: X3/G4
+    ros2 run ydlidar_ros2_driver ydlidar_ros2_driver_node --ros-args \
+        -p port:=/dev/ttyUSB0 \
+        -p baudrate:=128000 \
+        -p frame_id:=base_scan \
+        -p device_type:=0 \
+        -p sample_rate:=4 \
+        -p intensity:=false &
     LIDAR_PID=$!
 else
     echo "Hardware driver NOT found. Falling back to Simulation Mode..."

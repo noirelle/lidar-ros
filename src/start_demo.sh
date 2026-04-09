@@ -9,22 +9,21 @@ BRIDGE_PID=$!
 
 # Check for real LIDAR driver in /app/src/
 if [ -d "/app/src/ydlidar_ros2_driver" ]; then
-    echo "YDLIDAR driver found. Setting up workspace..."
+    echo "YDLIDAR driver directory found. Setting up workspace..."
     rm -rf /app/ros2_ws
     mkdir -p /app/ros2_ws/src
+    cd /app/ros2_ws/src
     
-    echo "--- Debug: Source Structure ---"
-    ls -l /app/src/ydlidar_ros2_driver
-    echo "--- End Debug ---"
-    
-    cp -r /app/src/ydlidar_ros2_driver /app/ros2_ws/src/
-    
-    echo "--- Debug: Workspace Structure ---"
-    find /app/ros2_ws/src -maxdepth 3
-    echo "--- End Debug ---"
+    # Bypass Docker volume syncing issues by cloning directly if the mount is empty
+    if [ ! -f "/app/src/ydlidar_ros2_driver/package.xml" ]; then
+        echo "Warning: Mounted directory is empty (Docker volume issue). Cloning fresh from git..."
+        git clone https://github.com/YDLIDAR/ydlidar_ros2_driver.git
+    else
+        cp -r /app/src/ydlidar_ros2_driver .
+    fi
     
     cd /app/ros2_ws
-    colcon build --symlink-install --packages-select ydlidar_ros2_driver --event-handlers console_direct+
+    colcon build --symlink-install --packages-select ydlidar_ros2_driver
     source /app/ros2_ws/install/setup.bash
     
     echo "Starting YDLIDAR X3 Pro Node (Hardware Mode)..."

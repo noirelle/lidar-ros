@@ -13,7 +13,7 @@ RUN apt update && apt install -y \
     && rm -rf /var/lib/apt/lists/*
 
 # Install YDLidar-SDK from zip bundle
-COPY src/bundles/YDLidar-SDK_bundle.zip /tmp/
+COPY bundles/YDLidar-SDK_bundle.zip /tmp/
 RUN unzip /tmp/YDLidar-SDK_bundle.zip -d /tmp/ && \
     mkdir -p /tmp/YDLidar-SDK/build && \
     cd /tmp/YDLidar-SDK/build && \
@@ -23,14 +23,22 @@ RUN unzip /tmp/YDLidar-SDK_bundle.zip -d /tmp/ && \
     rm -rf /tmp/YDLidar-SDK /tmp/YDLidar-SDK_bundle.zip
 
 # Build YDLIDAR ROS 2 Driver from zip bundle
-COPY src/bundles/ydlidar_ros2_bundle.zip /app/ros2_ws/src/
+COPY bundles/ydlidar_ros2_bundle.zip /app/ros2_ws/src/
 RUN unzip /app/ros2_ws/src/ydlidar_ros2_bundle.zip -d /app/ros2_ws/src/ && \
     rm /app/ros2_ws/src/ydlidar_ros2_bundle.zip
+
+# Copy launch and demo files
+COPY launch /app/ros2_ws/launch
+COPY demo /app/demo
+
 WORKDIR /app/ros2_ws
 RUN /bin/bash -c "source /opt/ros/humble/setup.bash && colcon build --symlink-install"
+
+EXPOSE 9090 8000
 
 ENV TURTLEBOT3_MODEL=burger
 RUN echo "source /opt/ros/humble/setup.bash" >> ~/.bashrc
 RUN echo "source /app/ros2_ws/install/setup.bash" >> ~/.bashrc
 
-WORKDIR /app
+# Set the default command to launch everything
+CMD ["/bin/bash", "-c", "source /app/ros2_ws/install/setup.bash && ros2 launch /app/ros2_ws/launch/main_launch.py"]

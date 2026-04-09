@@ -387,14 +387,16 @@
             for(let i=0; i<data.length; i++) {
                 const val = data[i];
                 const idx = i * 4;
-                if (val === -1) { // Unknown
-                    imgData.data[idx] = 250; imgData.data[idx+1] = 250; imgData.data[idx+2] = 250; imgData.data[idx+3] = 255;
-                } else {
-                    const color = 255 - (val * 2.55);
-                    imgData.data[idx] = color; 
-                    imgData.data[idx+1] = color;
-                    imgData.data[idx+2] = color;
-                    imgData.data[idx+3] = 255;
+                if (val > 50) { // Occupied (Wall)
+                    imgData.data[idx] = 0; 
+                    imgData.data[idx+1] = 0;
+                    imgData.data[idx+2] = 0;
+                    imgData.data[idx+3] = 255; // Solid Black
+                } else { // Free or Unknown
+                    imgData.data[idx] = 0;
+                    imgData.data[idx+1] = 0;
+                    imgData.data[idx+2] = 0;
+                    imgData.data[idx+3] = 0; // Completely Transparent
                 }
             }
             mCtx.putImageData(imgData, 0, 0);

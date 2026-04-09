@@ -17,7 +17,7 @@ if [ -d "/app/src/ydlidar_ros2_driver" ]; then
     # Bypass Docker volume syncing issues by cloning directly if the mount is empty
     if [ ! -f "/app/src/ydlidar_ros2_driver/package.xml" ]; then
         echo "Warning: Mounted directory is empty (Docker volume issue). Cloning fresh from git..."
-        git clone https://github.com/YDLIDAR/ydlidar_ros2_driver.git
+        git clone -b humble https://github.com/YDLIDAR/ydlidar_ros2_driver.git
     else
         cp -r /app/src/ydlidar_ros2_driver .
     fi

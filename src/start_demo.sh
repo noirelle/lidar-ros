@@ -26,6 +26,15 @@ if [ -d "/app/src/ydlidar_ros2_driver" ]; then
         -p sample_rate:=4 \
         -p intensity:=false &
     LIDAR_PID=$!
+
+    # Add a small diagnostic logger to confirm data flow in the terminal
+    (while true; do 
+        if [ $LIDAR_PID -gt 0 ]; then
+            ros2 topic hz /scan --window 5 | head -n 2
+        fi
+        sleep 10
+    done) &
+    LOGGER_PID=$!
 else
     echo "Hardware driver NOT found. Falling back to Simulation Mode..."
     python3 /app/src/fake_lidar.py &
@@ -43,6 +52,7 @@ cleanup() {
     kill $BRIDGE_PID
     kill $LIDAR_PID
     kill $HTTP_PID
+    [ ! -z "$LOGGER_PID" ] && kill $LOGGER_PID
     exit 0
 }
 

@@ -25,7 +25,7 @@ def generate_launch_description():
         default_value=PathJoinSubstitution([
             FindPackageShare('ydlidar_ros2_driver'),
             'params',
-            'ydlidar.yaml'
+            'X3.yaml'
         ])
     )
 

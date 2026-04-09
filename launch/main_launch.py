@@ -50,12 +50,20 @@ def generate_launch_description():
             parameters=[slam_params_path, {'use_sim_time': False}]
         ),
 
-        # 3. Static TF for Lidar-only SLAM (Identity odom -> base_link)
+        # 3. Static TFs for Lidar-only SLAM
+        # Link: odom -> base_link (Identity)
         Node(
             package='tf2_ros',
             executable='static_transform_publisher',
             name='static_tf_odom_to_base',
             arguments=['0', '0', '0', '0', '0', '0', 'odom', 'base_link']
+        ),
+        # Link: base_link -> laser_frame (The Missing Link!)
+        Node(
+            package='tf2_ros',
+            executable='static_transform_publisher',
+            name='static_tf_base_to_laser',
+            arguments=['0', '0', '0', '0', '0', '0', 'base_link', 'laser_frame']
         ),
 
         # 4. TF Web Republisher (Required for roslibjs TFClient)

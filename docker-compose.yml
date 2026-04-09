@@ -13,6 +13,4 @@ services:
       - ./src:/app/src
     devices:
       - "/dev/ttyUSB0:/dev/ttyUSB0"
-    privileged: true
-    network_mode: host
     command: ["/bin/bash", "/app/src/start_demo.sh"]

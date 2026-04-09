@@ -1,0 +1,16 @@
+# Dependencies
+deps/
+
+# ROS 2 Build files (if built locally)
+build/
+install/
+log/
+
+# Docker
+.docker/
+
+# IDEs
+.vscode/
+
+# Backups
+*.bak

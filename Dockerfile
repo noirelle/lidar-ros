@@ -32,7 +32,7 @@ COPY launch /app/ros2_ws/launch
 COPY demo /app/demo
 
 WORKDIR /app/ros2_ws
-RUN /bin/bash -c "source /opt/ros/humble/setup.bash && colcon build --symlink-install"
+RUN /bin/bash -c "source /opt/ros/humble/setup.bash && colcon build"
 
 EXPOSE 9090 8000
 

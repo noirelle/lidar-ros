@@ -27,10 +27,10 @@ if [ -d "/app/src/ydlidar_ros2_driver" ]; then
     source /app/ros2_ws/install/setup.bash
     
     echo "Starting YDLIDAR X3 Pro Node (Hardware Mode)..."
-    # Port: /dev/ttyUSB0, Baudrate: 128000, Model: X3/G4
+    # Port: /dev/ttyUSB0, Baudrate: 115200, Model: X3/X3 Pro
     ros2 run ydlidar_ros2_driver ydlidar_ros2_driver_node --ros-args \
         -p port:=/dev/ttyUSB0 \
-        -p baudrate:=128000 \
+        -p baudrate:=115200 \
         -p frame_id:=base_scan \
         -p device_type:=0 \
         -p sample_rate:=4 \

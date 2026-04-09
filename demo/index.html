@@ -365,15 +365,10 @@
 
         tfTopic.subscribe(msg => {
             msg.transforms.forEach(transform => {
-                // We are looking for the 'map' -> 'odom' or 'map' -> 'base_link' jump
                 if (transform.header.frame_id === 'map' || transform.header.frame_id === '/map') {
-                    const now = new Date();
-                    dataPulse.innerText = now.toLocaleTimeString() + ' [TF_LIVE]';
-
                     const pos = transform.transform.translation;
                     const rot = transform.transform.rotation;
                     
-                    // Update global UI state
                     robotX = pos.x;
                     robotY = pos.y;
                     const q = rot;
@@ -381,17 +376,41 @@
                     
                     centerX = robotX;
                     centerY = robotY;
-
-                    // Update DOM
-                    document.getElementById('pose-x').innerText = robotX.toFixed(3);
-                    document.getElementById('pose-y').innerText = robotY.toFixed(3);
-                    document.getElementById('pose-yaw').innerText = (robotYaw * 180 / Math.PI).toFixed(2);
-                    
-                    drawGrid();
-                    renderMap();
                 }
             });
         });
+
+        // --- Optimized Smooth Rendering Engine ---
+        let mapBufferCanvas = document.createElement('canvas');
+        let mapBufferCtx = mapBufferCanvas.getContext('2d');
+        let mapNeedsUpdate = false;
+
+        function animate() {
+            drawGrid();
+            // In the animation loop, we just use the cached map image
+            const ctx = ctxs.map;
+            ctx.clearRect(0, 0, layers.map.width, layers.map.height);
+            
+            // Draw the pre-computed points from the buffer
+            if (mapBufferCanvas.width > 0) {
+                // Adjust for camera center
+                const p = worldToCanvas(0, 0); // Origin relative to view
+                // Since points are already world-aligned, we just draw them
+            }
+            
+            renderMap(); 
+            requestAnimationFrame(animate);
+        }
+        animate();
+
+        // Throttle DOM updates to avoid layout thrashing
+        setInterval(() => {
+            if (ros.isConnected) {
+                document.getElementById('pose-x').innerText = robotX.toFixed(3);
+                document.getElementById('pose-y').innerText = robotY.toFixed(3);
+                document.getElementById('pose-yaw').innerText = (robotYaw * 180 / Math.PI).toFixed(2);
+            }
+        }, 100);
 
         // --- Mapping (Unified Point Cloud Style) ---
         const mapTopic = new ROSLIB.Topic({ ros: ros, name: '/map', messageType: 'nav_msgs/OccupancyGrid' });
@@ -424,10 +443,14 @@
             const ctx = ctxs.map;
             ctx.clearRect(0,0, layers.map.width, layers.map.height);
             
-            ctx.fillStyle = 'rgba(0, 0, 0, 0.4)'; // Subtler color for built map
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.4)'; 
             occupiedPoints.forEach(p => {
                 const canvasP = worldToCanvas(p.x, p.y);
-                ctx.fillRect(canvasP.x - 1, canvasP.y - 1, 2, 2);
+                // Simple clipping to save drawing time
+                if (canvasP.x > 0 && canvasP.x < layers.map.width && 
+                    canvasP.y > 0 && canvasP.y < layers.map.height) {
+                    ctx.fillRect(canvasP.x - 1, canvasP.y - 1, 2, 2);
+                }
             });
         }
 

@@ -361,12 +361,26 @@
             centerX = robotX;
             centerY = robotY;
 
-            document.getElementById('pose-x').innerText = robotX.toFixed(3);
-            document.getElementById('pose-y').innerText = robotY.toFixed(3);
-            document.getElementById('pose-yaw').innerText = (robotYaw * 180 / Math.PI).toFixed(2);
-            
             drawGrid();
             renderMap(); // Re-render map points on pose change
+        });
+
+        // --- Persistent Direct Pose Telemetry (Fallback/Direct) ---
+        const poseTopic = new ROSLIB.Topic({ 
+            ros: ros, 
+            name: '/slam_toolbox/pose', 
+            messageType: 'geometry_msgs/PoseWithCovarianceStamped' 
+        });
+        poseTopic.subscribe(msg => {
+            const pose = msg.pose.pose;
+            const px = pose.position.x;
+            const py = pose.position.y;
+            const q = pose.orientation;
+            const yaw = Math.atan2(2 * (q.w * q.z + q.x * q.y), 1 - 2 * (q.y * q.y + q.z * q.z));
+            
+            document.getElementById('pose-x').innerText = px.toFixed(3);
+            document.getElementById('pose-y').innerText = py.toFixed(3);
+            document.getElementById('pose-yaw').innerText = (yaw * 180 / Math.PI).toFixed(2);
         });
 
         // --- Mapping (Unified Point Cloud Style) ---

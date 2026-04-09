@@ -12,14 +12,19 @@ if [ -d "/app/src/ydlidar_ros2_driver" ]; then
     echo "YDLIDAR driver found. Setting up workspace..."
     rm -rf /app/ros2_ws
     mkdir -p /app/ros2_ws/src
+    
+    echo "--- Debug: Source Structure ---"
+    ls -l /app/src/ydlidar_ros2_driver
+    echo "--- End Debug ---"
+    
     cp -r /app/src/ydlidar_ros2_driver /app/ros2_ws/src/
     
     echo "--- Debug: Workspace Structure ---"
-    ls -F /app/ros2_ws/src/ydlidar_ros2_driver/package.xml
+    find /app/ros2_ws/src -maxdepth 3
     echo "--- End Debug ---"
     
     cd /app/ros2_ws
-    colcon build --symlink-install --packages-select ydlidar_ros2_driver
+    colcon build --symlink-install --packages-select ydlidar_ros2_driver --event-handlers console_direct+
     source /app/ros2_ws/install/setup.bash
     
     echo "Starting YDLIDAR X3 Pro Node (Hardware Mode)..."

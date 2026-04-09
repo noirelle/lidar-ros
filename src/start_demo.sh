@@ -26,16 +26,39 @@ if [ -d "/app/src/ydlidar_ros2_driver" ]; then
     colcon build --symlink-install --packages-select ydlidar_ros2_driver
     source /app/ros2_ws/install/setup.bash
     
-    echo "Starting YDLIDAR X3 Pro Node (Hardware Mode)..."
-    # Port: /dev/ttyUSB0, Baudrate: 115200, Model: X3/X3 Pro
-    ros2 run ydlidar_ros2_driver ydlidar_ros2_driver_node --ros-args \
-        -p port:=/dev/ttyUSB0 \
-        -p baudrate:=115200 \
-        -p frame_id:=base_scan \
-        -p device_type:=0 \
-        -p sample_rate:=4 \
-        -p intensity:=false &
-    LIDAR_PID=$!
+    echo "Starting YDLIDAR Auto-Detect Node (Testing multiple configurations)..."
+    
+    # Auto-detect loop for Baudrate and SingleChannel modes
+    for baud in 115200 128000 230400 512000; do
+        for single_channel in "true" "false"; do
+            echo "--------------------------------------------------------"
+            echo "[Auto-Detect] Testing Baudrate: $baud, SingleChannel: $single_channel"
+            
+            ros2 run ydlidar_ros2_driver ydlidar_ros2_driver_node --ros-args \
+                -p port:=/dev/ttyUSB0 \
+                -p baudrate:=$baud \
+                -p isSingleChannel:=$single_channel \
+                -p lidar_type:=1 \
+                -p support_motor_dtr:=true \
+                -p frame_id:=base_scan \
+                -p device_type:=0 \
+                -p sample_rate:=4 \
+                -p intensity:=false &
+            LIDAR_PID=$!
+            
+            # Wait 12 seconds. If using wrong parameters, the node crashes gracefully at ~8s.
+            sleep 12
+            
+            if kill -0 $LIDAR_PID 2>/dev/null; then
+                echo "--------------------------------------------------------"
+                echo "[Auto-Detect] SUCCESS! Stable configuration found at $baud."
+                break 2
+            else
+                echo "[Auto-Detect] FAILED. Node stopped. Trying next..."
+                wait $LIDAR_PID 2>/dev/null
+            fi
+        done
+    done
 
     # Add a small diagnostic logger to confirm data flow in the terminal
     (while true; do 

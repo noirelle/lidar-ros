@@ -3,100 +3,90 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>LiDAR Mission Control - SLAM Edition</title>
+    <title>LiDAR Mission Control | Minimalist</title>
     <script src="https://cdn.jsdelivr.net/npm/roslib@1/build/roslib.min.js"></script>
     <style>
         :root {
-            --bg-dark: #05070a;
-            --panel-bg: rgba(13, 17, 23, 0.7);
-            --accent: #00d2ff;
-            --accent-glow: rgba(0, 210, 255, 0.3);
-            --success: #39d353;
-            --warning: #f1e05a;
-            --border-color: rgba(0, 210, 255, 0.1);
-            --text-main: #e6edf3;
-            --text-muted: #8b949e;
+            --bg-light: #fcfcfc;
+            --panel-bg: #ffffff;
+            --accent: #000000;
+            --accent-glow: rgba(0, 0, 0, 0.05);
+            --success: #000000; /* Black for minimalist feel, use dot color for status */
+            --success-actual: #27ae60;
+            --border-color: #e0e0e0;
+            --text-main: #1a1a1a;
+            --text-muted: #757575;
+            --sidebar-width: 320px;
         }
 
         body {
             margin: 0;
             padding: 0;
-            background-color: var(--bg-dark);
+            background-color: var(--bg-light);
             color: var(--text-main);
-            font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            font-family: 'SF Mono', 'JetBrains Mono', 'Monaco', 'Courier New', monospace;
             height: 100vh;
             display: grid;
-            grid-template-columns: 320px 1fr;
+            grid-template-columns: var(--sidebar-width) 1fr;
             overflow: hidden;
         }
 
         /* Sidebar Styling */
         aside {
             background: var(--panel-bg);
-            backdrop-filter: blur(12px);
             border-right: 1px solid var(--border-color);
-            padding: 24px;
+            padding: 32px 24px;
             display: flex;
             flex-direction: column;
-            gap: 20px;
+            gap: 28px;
             z-index: 100;
+            box-shadow: 4px 0 15px rgba(0,0,0,0.02);
         }
 
         .logo {
-            font-size: 1.4rem;
-            font-weight: 800;
-            letter-spacing: -1px;
+            font-size: 1.2rem;
+            font-weight: 900;
+            letter-spacing: 2px;
             color: var(--accent);
             display: flex;
             align-items: center;
-            gap: 10px;
-        }
-
-        .logo-dot {
-            width: 12px;
-            height: 12px;
-            background: var(--accent);
-            border-radius: 50%;
-            box-shadow: 0 0 10px var(--accent);
-            animation: pulse 2s infinite;
-        }
-
-        @keyframes pulse {
-            0% { transform: scale(1); opacity: 1; }
-            50% { transform: scale(1.5); opacity: 0.5; }
-            100% { transform: scale(1); opacity: 1; }
+            gap: 12px;
+            text-transform: uppercase;
+            border-bottom: 2px solid var(--accent);
+            padding-bottom: 8px;
         }
 
         .telemetry-card {
-            background: rgba(255, 255, 255, 0.03);
-            border: 1px solid var(--border-color);
-            border-radius: 12px;
-            padding: 16px;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
         }
 
         .telemetry-card h3 {
-            margin: 0 0 12px 0;
-            font-size: 0.75rem;
+            margin: 0;
+            font-size: 0.7rem;
             text-transform: uppercase;
-            letter-spacing: 1px;
+            letter-spacing: 1.5px;
             color: var(--text-muted);
+            border-left: 2px solid var(--accent);
+            padding-left: 8px;
         }
 
         .data-row {
             display: flex;
             justify-content: space-between;
-            margin-bottom: 8px;
-            font-family: 'JetBrains Mono', monospace;
-            font-size: 0.9rem;
+            font-size: 0.85rem;
+            padding: 4px 0;
+            border-bottom: 1px dashed var(--border-color);
         }
 
         .data-label { color: var(--text-muted); }
-        .data-value { color: var(--accent); }
+        .data-value { color: var(--accent); font-weight: 600; }
 
         /* Main Viewport */
         main {
             position: relative;
-            background: radial-gradient(circle at center, #0f1724 0%, #05070a 100%);
+            background-color: var(--bg-light);
             display: flex;
             align-items: center;
             justify-content: center;
@@ -107,7 +97,6 @@
             position: relative;
             width: 100%;
             height: 100%;
-            transform-origin: center center;
         }
 
         canvas {
@@ -118,104 +107,113 @@
             height: 100%;
         }
 
-        /* Info HUD */
+        /* HUD Overlay */
+        .hud-info {
+            position: absolute;
+            top: 24px;
+            right: 24px;
+            background: var(--panel-bg);
+            padding: 12px 20px;
+            border: 1px solid var(--accent);
+            font-size: 0.75rem;
+            letter-spacing: 1px;
+            text-transform: uppercase;
+            font-weight: bold;
+        }
+
         .hud-bottom {
             position: absolute;
             bottom: 24px;
             left: 50%;
             transform: translateX(-50%);
             display: flex;
-            gap: 12px;
+            gap: 24px;
+            font-size: 0.7rem;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 1px;
         }
 
-        .hud-pill {
-            background: var(--panel-bg);
-            backdrop-filter: blur(8px);
-            border: 1px solid var(--border-color);
-            padding: 8px 16px;
-            border-radius: 20px;
-            font-size: 0.8rem;
-            display: flex;
-            align-items: center;
-            gap: 8px;
-        }
-
-        #status-light {
+        #status-dot {
+            display: inline-block;
             width: 8px;
             height: 8px;
             border-radius: 50%;
-            background: #ff4444;
+            margin-right: 6px;
+            background: #e0e0e0;
+            border: 1px solid var(--accent);
         }
 
-        #status-light.online { background: var(--success); box-shadow: 0 0 8px var(--success); }
+        #status-dot.online { background: var(--accent); }
     </style>
 </head>
 <body>
 
     <aside>
         <div class="logo">
-            <div class="logo-dot"></div>
-            LIDAR HUD
+            LIDAR SYSTEM
         </div>
 
         <div class="telemetry-card">
-            <h3>System Status</h3>
+            <h3>Diagnostic</h3>
+            <div class="data-row">
+                <span class="data-label">Link</span>
+                <span class="data-value" id="conn-text">DISCONNECTED</span>
+            </div>
             <div class="data-row">
                 <span class="data-label">State</span>
-                <span class="data-value" id="sys-state">OFFLINE</span>
+                <span class="data-value" id="sys-state">STANDBY</span>
             </div>
             <div class="data-row">
-                <span class="data-label">LiDAR Hz</span>
-                <span class="data-value" id="scan-hz">0.0</span>
-            </div>
-        </div>
-
-        <div class="telemetry-card">
-            <h3>Global Position (SLAM)</h3>
-            <div class="data-row">
-                <span class="data-label">X-POS</span>
-                <span class="data-value" id="pose-x">0.000 m</span>
-            </div>
-            <div class="data-row">
-                <span class="data-label">Y-POS</span>
-                <span class="data-value" id="pose-y">0.000 m</span>
-            </div>
-            <div class="data-row">
-                <span class="data-label">HEADING</span>
-                <span class="data-value" id="pose-yaw">0.0°</span>
+                <span class="data-label">Hz</span>
+                <span class="data-value" id="scan-hz">0.00</span>
             </div>
         </div>
 
         <div class="telemetry-card">
-            <h3>Mapping Detail</h3>
+            <h3>Cartesian Pose</h3>
             <div class="data-row">
-                <span class="data-label">Resolution</span>
-                <span class="data-value">5.0 cm</span>
+                <span class="data-label">X_MTR</span>
+                <span class="data-value" id="pose-x">0.000</span>
             </div>
             <div class="data-row">
-                <span class="data-label">Updated</span>
-                <span class="data-value" id="map-time">Never</span>
+                <span class="data-label">Y_MTR</span>
+                <span class="data-value" id="pose-y">0.000</span>
+            </div>
+            <div class="data-row">
+                <span class="data-label">YAW_DEG</span>
+                <span class="data-value" id="pose-yaw">0.00</span>
+            </div>
+        </div>
+
+        <div class="telemetry-card" style="margin-top: auto;">
+            <h3>Environment</h3>
+            <div class="data-row">
+                <span class="data-label">Map Size</span>
+                <span class="data-value" id="map-size">0.0x0.0 m</span>
+            </div>
+            <div class="data-row">
+                <span class="data-label">Scale</span>
+                <span class="data-value" id="zoom-text">5.0m</span>
             </div>
         </div>
     </aside>
 
     <main id="main-viewport">
         <div id="visualizer-container">
-            <!-- Layers -->
             <canvas id="gridLayer"></canvas>
             <canvas id="mapLayer"></canvas>
             <canvas id="scanLayer"></canvas>
             <canvas id="uiLayer"></canvas>
         </div>
 
+        <div class="hud-info">
+            AUTO-SCAN: ACTIVE
+        </div>
+
         <div class="hud-bottom">
-            <div class="hud-pill">
-                <span id="status-light"></span>
-                <span id="conn-text">WebSocket: Connecting...</span>
-            </div>
-            <div class="hud-pill">
-                Zoom: <span id="zoom-text">5.0m</span>
-            </div>
+            <div><span id="status-dot"></span> <span id="conn-label">WS-LINK</span></div>
+            <div>COORDINATE_SYS: MAP_RELATIVE</div>
         </div>
     </main>
 
@@ -225,20 +223,26 @@
             url: 'ws://' + window.location.hostname + ':9090'
         });
 
-        const statusLight = document.getElementById('status-light');
+        const statusDot = document.getElementById('status-dot');
         const connText = document.getElementById('conn-text');
         const sysState = document.getElementById('sys-state');
 
         ros.on('connection', () => {
-            statusLight.className = 'online';
-            connText.innerText = 'WebSocket: Active';
-            sysState.innerText = 'INITIALIZING';
+            statusDot.className = 'online';
+            connText.innerText = 'CONNECTED';
+            sysState.innerText = 'STREAMING';
+        });
+
+        ros.on('close', () => {
+            statusDot.className = '';
+            connText.innerText = 'DISCONNECTED';
+            sysState.innerText = 'STANDBY';
         });
 
         // --- Viewport State ---
-        let zoom = 5.0; // Viewport range in meters
-        let centerX = 0, centerY = 0; // Viewport center in meters (world space)
-        let robotX = 0, robotY = 0, robotYaw = 0; // Robot pose in world space
+        let zoom = 5.0; 
+        let centerX = 0, centerY = 0; 
+        let robotX = 0, robotY = 0, robotYaw = 0;
 
         const container = document.getElementById('main-viewport');
         const layers = {
@@ -259,35 +263,29 @@
         window.addEventListener('resize', resize);
         resize();
 
-        // --- Coordinate Transforms ---
-        // Converts meters to pixels based on current zoom and viewport center
         function worldToCanvas(x, y) {
             const size = Math.min(layers.grid.width, layers.grid.height);
             const scale = size / (zoom * 2);
-            
-            // Offset from center of viewport
             const dx = (x - centerX) * scale;
             const dy = (y - centerY) * scale;
-            
             return {
                 x: (layers.grid.width / 2) + dx,
-                y: (layers.grid.height / 2) - dy // Invert Y for canvas
+                y: (layers.grid.height / 2) - dy
             };
         }
 
-        // --- Grid Drawing ---
+        // --- Grid Drawing (Blueprint Style) ---
         function drawGrid() {
             const ctx = ctxs.grid;
             ctx.clearRect(0, 0, layers.grid.width, layers.grid.height);
             
-            const step = 1.0; // 1 meter grid
+            const step = 1.0; 
             const size = Math.min(layers.grid.width, layers.grid.height);
             const scale = size / (zoom * 2);
 
-            ctx.strokeStyle = 'rgba(0, 210, 255, 0.05)';
+            ctx.strokeStyle = '#e0e0e0';
             ctx.lineWidth = 1;
 
-            // Draw Dynamic Grid
             const startX = Math.floor((centerX - zoom) / step) * step;
             const endX = Math.ceil((centerX + zoom) / step) * step;
             const startY = Math.floor((centerY - zoom) / step) * step;
@@ -297,42 +295,41 @@
                 const p = worldToCanvas(x, 0);
                 ctx.beginPath(); ctx.moveTo(p.x, 0); ctx.lineTo(p.x, layers.grid.height); ctx.stroke();
                 
-                if (Math.abs(x) < 0.01) continue;
-                ctx.fillStyle = 'rgba(139, 148, 158, 0.5)';
-                ctx.font = '10px JetBrains Mono';
-                ctx.fillText(x.toFixed(0) + 'm', p.x + 5, 20);
+                ctx.fillStyle = '#757575';
+                ctx.font = '8px monospace';
+                ctx.fillText(x.toFixed(0), p.x + 4, 15);
             }
 
             for (let y = startY; y <= endY; y += step) {
                 const p = worldToCanvas(0, y);
                 ctx.beginPath(); ctx.moveTo(0, p.y); ctx.lineTo(layers.grid.width, p.y); ctx.stroke();
                 
-                if (Math.abs(y) < 0.01) continue;
-                ctx.fillStyle = 'rgba(139, 148, 158, 0.5)';
-                ctx.font = '10px JetBrains Mono';
-                ctx.fillText(y.toFixed(0) + 'm', 5, p.y - 5);
+                ctx.fillStyle = '#757575';
+                ctx.font = '8px monospace';
+                ctx.fillText(y.toFixed(0), 10, p.y - 4);
             }
 
-            // Origin Crosshair
+            // Central Axes
             const origin = worldToCanvas(0, 0);
-            ctx.strokeStyle = 'rgba(0, 210, 255, 0.3)';
+            ctx.strokeStyle = '#000000';
+            ctx.lineWidth = 0.5;
             ctx.beginPath();
-            ctx.arc(origin.x, origin.y, 4, 0, Math.PI*2);
+            ctx.arc(origin.x, origin.y, 3, 0, Math.PI*2);
             ctx.stroke();
         }
 
-        // --- LiDAR Thread ---
+        // --- Scan Logic (Black Points) ---
         const scanTopic = new ROSLIB.Topic({ ros: ros, name: '/scan', messageType: 'sensor_msgs/LaserScan' });
         let lastScanTime = Date.now();
         scanTopic.subscribe(msg => {
             const now = Date.now();
-            document.getElementById('scan-hz').innerText = (1000 / (now - lastScanTime)).toFixed(1);
+            document.getElementById('scan-hz').innerText = (1000 / (now - lastScanTime)).toFixed(2);
             lastScanTime = now;
 
             const ctx = ctxs.scan;
             ctx.clearRect(0, 0, layers.scan.width, layers.scan.height);
             
-            ctx.fillStyle = '#39d353';
+            ctx.fillStyle = '#000000';
             const angleMin = msg.angle_min;
             const angleInc = msg.angle_increment;
 
@@ -344,16 +341,13 @@
                     const ly = robotY + r * Math.cos(angle);
                     
                     const p = worldToCanvas(lx, ly);
-                    ctx.beginPath();
-                    ctx.arc(p.x, p.y, 1.5, 0, Math.PI*2);
-                    ctx.fill();
+                    ctx.fillRect(p.x-1, p.y-1, 2, 2);
                 }
             }
-            sysState.innerText = 'STREAMEING';
             drawUI();
         });
 
-        // --- TF Thread (Pose Tracking) ---
+        // --- SLAM Tracking ---
         const tfClient = new ROSLIB.TFClient({
             ros: ros,
             fixedFrame: 'map',
@@ -364,30 +358,29 @@
         tfClient.subscribe('base_link', (tf) => {
             robotX = tf.translation.x;
             robotY = tf.translation.y;
-            
-            // Convert quaternion to yaw
             const q = tf.rotation;
             robotYaw = Math.atan2(2 * (q.w * q.z + q.x * q.y), 1 - 2 * (q.y * q.y + q.z * q.z));
             
-            // Follow robot with camera
             centerX = robotX;
             centerY = robotY;
 
-            document.getElementById('pose-x').innerText = robotX.toFixed(3) + ' m';
-            document.getElementById('pose-y').innerText = robotY.toFixed(3) + ' m';
-            document.getElementById('pose-yaw').innerText = (robotYaw * 180 / Math.PI).toFixed(1) + '°';
+            document.getElementById('pose-x').innerText = robotX.toFixed(3);
+            document.getElementById('pose-y').innerText = robotY.toFixed(3);
+            document.getElementById('pose-yaw').innerText = (robotYaw * 180 / Math.PI).toFixed(2);
             
             drawGrid();
         });
 
-        // --- Map Thread ---
+        // --- Mapping (Grayscale Tiles) ---
         const mapTopic = new ROSLIB.Topic({ ros: ros, name: '/map', messageType: 'nav_msgs/OccupancyGrid' });
         let mapCanvas = document.createElement('canvas');
         mapTopic.subscribe(msg => {
-            document.getElementById('map-time').innerText = new Date().toLocaleTimeString();
             const info = msg.info;
             const data = msg.data;
             
+            document.getElementById('map-size').innerText = 
+                (info.width * info.resolution).toFixed(1) + 'x' + (info.height * info.resolution).toFixed(1) + ' m';
+
             mapCanvas.width = info.width;
             mapCanvas.height = info.height;
             const mCtx = mapCanvas.getContext('2d');
@@ -397,12 +390,12 @@
                 const val = data[i];
                 const idx = i * 4;
                 if (val === -1) { // Unknown
-                    imgData.data[idx] = 10; imgData.data[idx+1] = 15; imgData.data[idx+2] = 20; imgData.data[idx+3] = 255;
+                    imgData.data[idx] = 250; imgData.data[idx+1] = 250; imgData.data[idx+2] = 250; imgData.data[idx+3] = 255;
                 } else {
                     const color = 255 - (val * 2.55);
-                    imgData.data[idx] = color * 0.2; // Tint maps blue
-                    imgData.data[idx+1] = color * 0.4;
-                    imgData.data[idx+2] = color * 0.6;
+                    imgData.data[idx] = color; 
+                    imgData.data[idx+1] = color;
+                    imgData.data[idx+2] = color;
                     imgData.data[idx+3] = 255;
                 }
             }
@@ -417,7 +410,6 @@
             const size = Math.min(layers.grid.width, layers.grid.height);
             const scale = size / (zoom * 2);
             
-            // Origin of map in world space
             const ox = info.origin.position.x;
             const oy = info.origin.position.y;
             const p = worldToCanvas(ox, oy);
@@ -427,12 +419,13 @@
             
             ctx.save();
             ctx.translate(p.x, p.y);
-            ctx.scale(1, -1); // Map is row-major bottom-up in ROS
+            ctx.scale(1, -1);
+            ctx.globalAlpha = 1.0;
             ctx.drawImage(mapCanvas, 0, 0, w, h);
             ctx.restore();
         }
 
-        // --- UI Layer (Robot Indicator) ---
+        // --- Robot Indicator (Minimalist Triangle) ---
         function drawUI() {
             const ctx = ctxs.ui;
             ctx.clearRect(0,0, layers.ui.width, layers.ui.height);
@@ -441,23 +434,15 @@
             
             ctx.save();
             ctx.translate(p.x, p.y);
-            ctx.rotate(-robotYaw); // Canvas rotates Clockwise
+            ctx.rotate(-robotYaw);
             
-            // Robot Body
-            ctx.fillStyle = 'white';
+            ctx.fillStyle = '#000000';
             ctx.beginPath();
-            ctx.moveTo(0, -10); // Nose
-            ctx.lineTo(7, 8);
-            ctx.lineTo(-7, 8);
+            ctx.moveTo(0, -8);
+            ctx.lineTo(6, 6);
+            ctx.lineTo(-6, 6);
             ctx.closePath();
             ctx.fill();
-            
-            // Glow
-            ctx.shadowBlur = 15;
-            ctx.shadowColor = '#00d2ff';
-            ctx.strokeStyle = '#00d2ff';
-            ctx.lineWidth = 2;
-            ctx.stroke();
             
             ctx.restore();
         }
@@ -466,7 +451,7 @@
         container.addEventListener('wheel', (e) => {
             e.preventDefault();
             if (e.deltaY < 0) zoom = Math.max(1, zoom * 0.9);
-            else zoom = Math.min(50, zoom * 1.1);
+            else zoom = Math.min(100, zoom * 1.1);
             document.getElementById('zoom-text').innerText = zoom.toFixed(1) + 'm';
             drawGrid();
         });

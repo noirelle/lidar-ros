@@ -1,31 +1,17 @@
 #!/bin/bash
 
-# Source ROS2 humility environment
+# Source ROS 2 base and our pre-built hardware workspace
 source /opt/ros/humble/setup.bash
+if [ -f "/app/ros2_ws/install/setup.bash" ]; then
+    source /app/ros2_ws/install/setup.bash
+fi
 
 echo "Starting ROS2 WebSocket Bridge..."
 ros2 launch rosbridge_server rosbridge_websocket_launch.xml port:=9090 &
 BRIDGE_PID=$!
 
-# Check for real LIDAR driver in /app/src/
-if [ -d "/app/src/ydlidar_ros2_driver" ]; then
-    echo "YDLIDAR driver directory found. Setting up workspace..."
-    rm -rf /app/ros2_ws
-    mkdir -p /app/ros2_ws/src
-    cd /app/ros2_ws/src
-    
-    # Bypass Docker volume syncing issues by cloning directly if the mount is empty
-    if [ ! -f "/app/src/ydlidar_ros2_driver/package.xml" ]; then
-        echo "Warning: Mounted directory is empty (Docker volume issue). Cloning fresh from git..."
-        git clone -b humble https://github.com/YDLIDAR/ydlidar_ros2_driver.git
-    else
-        cp -r /app/src/ydlidar_ros2_driver .
-    fi
-    
-    cd /app/ros2_ws
-    colcon build --symlink-install --packages-select ydlidar_ros2_driver
-    source /app/ros2_ws/install/setup.bash
-    
+# Check for real LIDAR driver presence (now baked into the image)
+if [ -d "/app/ros2_ws/src/ydlidar_ros2_driver" ]; then
     echo "Starting YDLIDAR S2 PRO Node (Hardware Mode)..."
     
     # Locked-in configuration found by the Auto-Detector

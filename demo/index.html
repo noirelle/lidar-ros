@@ -3,244 +3,471 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>YDLidar Real-Time Radar</title>
+    <title>LiDAR Mission Control - SLAM Edition</title>
     <script src="https://cdn.jsdelivr.net/npm/roslib@1/build/roslib.min.js"></script>
     <style>
         :root {
-            --bg-color: #0d1117;
-            --panel-bg: rgba(22, 27, 34, 0.8);
-            --accent-color: #58a6ff;
-            --radar-line: rgba(88, 166, 255, 0.2);
-            --point-color: #39d353;
-            --text-color: #c9d1d9;
+            --bg-dark: #05070a;
+            --panel-bg: rgba(13, 17, 23, 0.7);
+            --accent: #00d2ff;
+            --accent-glow: rgba(0, 210, 255, 0.3);
+            --success: #39d353;
+            --warning: #f1e05a;
+            --border-color: rgba(0, 210, 255, 0.1);
+            --text-main: #e6edf3;
+            --text-muted: #8b949e;
         }
 
         body {
             margin: 0;
             padding: 0;
-            background-color: var(--bg-color);
-            color: var(--text-color);
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            overflow: hidden;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
+            background-color: var(--bg-dark);
+            color: var(--text-main);
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
             height: 100vh;
+            display: grid;
+            grid-template-columns: 320px 1fr;
+            overflow: hidden;
         }
 
-        #radar-container {
-            position: relative;
-            width: 85vh;
-            height: 85vh;
+        /* Sidebar Styling */
+        aside {
+            background: var(--panel-bg);
+            backdrop-filter: blur(12px);
+            border-right: 1px solid var(--border-color);
+            padding: 24px;
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+            z-index: 100;
+        }
+
+        .logo {
+            font-size: 1.4rem;
+            font-weight: 800;
+            letter-spacing: -1px;
+            color: var(--accent);
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .logo-dot {
+            width: 12px;
+            height: 12px;
+            background: var(--accent);
             border-radius: 50%;
-            background: radial-gradient(circle, #161b22 0%, #0d1117 70%);
-            box-shadow: 0 0 50px rgba(0,0,0,0.5), inset 0 0 20px rgba(88, 166, 255, 0.1);
-            border: 1px solid var(--radar-line);
+            box-shadow: 0 0 10px var(--accent);
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0% { transform: scale(1); opacity: 1; }
+            50% { transform: scale(1.5); opacity: 0.5; }
+            100% { transform: scale(1); opacity: 1; }
+        }
+
+        .telemetry-card {
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding: 16px;
+        }
+
+        .telemetry-card h3 {
+            margin: 0 0 12px 0;
+            font-size: 0.75rem;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: var(--text-muted);
+        }
+
+        .data-row {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 8px;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.9rem;
+        }
+
+        .data-label { color: var(--text-muted); }
+        .data-value { color: var(--accent); }
+
+        /* Main Viewport */
+        main {
+            position: relative;
+            background: radial-gradient(circle at center, #0f1724 0%, #05070a 100%);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: grab;
+        }
+
+        #visualizer-container {
+            position: relative;
+            width: 100%;
+            height: 100%;
+            transform-origin: center center;
         }
 
         canvas {
             position: absolute;
             top: 0;
             left: 0;
+            width: 100%;
+            height: 100%;
         }
 
-        .overlay {
+        /* Info HUD */
+        .hud-bottom {
             position: absolute;
-            top: 20px;
-            left: 20px;
-            background: var(--panel-bg);
-            backdrop-filter: blur(10px);
-            padding: 15px;
-            border-radius: 8px;
-            border: 1px solid var(--radar-line);
-            z-index: 10;
-        }
-
-        .status-dot {
-            display: inline-block;
-            width: 10px;
-            height: 10px;
-            border-radius: 50%;
-            margin-right: 8px;
-            background-color: #ff7b72;
-        }
-
-        .status-dot.connected { background-color: #39d353; }
-
-        h1 { font-size: 1.2rem; margin: 0 0 10px 0; color: var(--accent-color); }
-        p { margin: 5px 0; font-size: 0.9rem; }
-
-        .controls {
-            position: absolute;
-            bottom: 20px;
-            right: 20px;
-            background: var(--panel-bg);
-            padding: 10px;
-            border-radius: 8px;
-            border: 1px solid var(--radar-line);
-        }
-
-        .zoom-info {
-            position: absolute;
-            bottom: 20px;
+            bottom: 24px;
             left: 50%;
             transform: translateX(-50%);
-            font-size: 0.8rem;
-            opacity: 0.6;
+            display: flex;
+            gap: 12px;
         }
+
+        .hud-pill {
+            background: var(--panel-bg);
+            backdrop-filter: blur(8px);
+            border: 1px solid var(--border-color);
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-size: 0.8rem;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        #status-light {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #ff4444;
+        }
+
+        #status-light.online { background: var(--success); box-shadow: 0 0 8px var(--success); }
     </style>
 </head>
 <body>
 
-    <div class="overlay">
-        <h1>LiDAR System Status</h1>
-        <p><span id="status-dot" class="status-dot"></span> Connection: <span id="status-text">Disconnected</span></p>
-        <p>Topic: <span style="color: var(--accent-color)">/scan</span></p>
-        <p>Points: <span id="point-count">0</span></p>
-    </div>
+    <aside>
+        <div class="logo">
+            <div class="logo-dot"></div>
+            LIDAR HUD
+        </div>
 
-    <div id="radar-container">
-        <canvas id="gridCanvas"></canvas>
-        <canvas id="pointCanvas"></canvas>
-    </div>
+        <div class="telemetry-card">
+            <h3>System Status</h3>
+            <div class="data-row">
+                <span class="data-label">State</span>
+                <span class="data-value" id="sys-state">OFFLINE</span>
+            </div>
+            <div class="data-row">
+                <span class="data-label">LiDAR Hz</span>
+                <span class="data-value" id="scan-hz">0.0</span>
+            </div>
+        </div>
 
-    <div class="controls">
-        <p>Use Mouse Wheel to Zoom</p>
-    </div>
+        <div class="telemetry-card">
+            <h3>Global Position (SLAM)</h3>
+            <div class="data-row">
+                <span class="data-label">X-POS</span>
+                <span class="data-value" id="pose-x">0.000 m</span>
+            </div>
+            <div class="data-row">
+                <span class="data-label">Y-POS</span>
+                <span class="data-value" id="pose-y">0.000 m</span>
+            </div>
+            <div class="data-row">
+                <span class="data-label">HEADING</span>
+                <span class="data-value" id="pose-yaw">0.0°</span>
+            </div>
+        </div>
 
-    <div class="zoom-info">Range: <span id="range-val">5.0</span>m</div>
+        <div class="telemetry-card">
+            <h3>Mapping Detail</h3>
+            <div class="data-row">
+                <span class="data-label">Resolution</span>
+                <span class="data-value">5.0 cm</span>
+            </div>
+            <div class="data-row">
+                <span class="data-label">Updated</span>
+                <span class="data-value" id="map-time">Never</span>
+            </div>
+        </div>
+    </aside>
+
+    <main id="main-viewport">
+        <div id="visualizer-container">
+            <!-- Layers -->
+            <canvas id="gridLayer"></canvas>
+            <canvas id="mapLayer"></canvas>
+            <canvas id="scanLayer"></canvas>
+            <canvas id="uiLayer"></canvas>
+        </div>
+
+        <div class="hud-bottom">
+            <div class="hud-pill">
+                <span id="status-light"></span>
+                <span id="conn-text">WebSocket: Connecting...</span>
+            </div>
+            <div class="hud-pill">
+                Zoom: <span id="zoom-text">5.0m</span>
+            </div>
+        </div>
+    </main>
 
     <script>
-        const radarContainer = document.getElementById('radar-container');
-        const gridCanvas = document.getElementById('gridCanvas');
-        const pointCanvas = document.getElementById('pointCanvas');
-        const gCtx = gridCanvas.getContext('2d');
-        const pCtx = pointCanvas.getContext('2d');
-        
-        let scale = 50; // pixels per meter
-        let maxRange = 10; // meters for grid
-        let viewRange = 5.0;
-
-        function resize() {
-            const size = radarContainer.clientWidth;
-            gridCanvas.width = gridCanvas.height = size;
-            pointCanvas.width = pointCanvas.height = size;
-            drawGrid();
-        }
-
-        window.addEventListener('resize', resize);
-        resize();
-
-        function drawGrid() {
-            const center = gridCanvas.width / 2;
-            gCtx.clearRect(0,0, gridCanvas.width, gridCanvas.height);
-            
-            gCtx.strokeStyle = 'rgba(88, 166, 255, 0.1)';
-            gCtx.lineWidth = 1;
-
-            // Draw concentric circles
-            for (let r = 1; r <= maxRange; r++) {
-                gCtx.beginPath();
-                gCtx.arc(center, center, r * scale, 0, Math.PI * 2);
-                gCtx.stroke();
-                
-                if (r % 2 === 0) {
-                    gCtx.fillStyle = 'rgba(201, 209, 217, 0.3)';
-                    gCtx.font = '10px Arial';
-                    gCtx.fillText(r + 'm', center + r * scale + 5, center);
-                }
-            }
-
-            // Draw crosshairs
-            gCtx.beginPath();
-            gCtx.moveTo(0, center); gCtx.lineTo(gridCanvas.width, center);
-            gCtx.moveTo(center, 0); gCtx.lineTo(center, gridCanvas.height);
-            gCtx.stroke();
-
-            // Draw radial lines
-            for (let a = 0; a < 360; a += 30) {
-                const rad = a * Math.PI / 180;
-                gCtx.beginPath();
-                gCtx.moveTo(center, center);
-                gCtx.lineTo(center + Math.cos(rad) * gridCanvas.width, center + Math.sin(rad) * gridCanvas.width);
-                gCtx.stroke();
-            }
-        }
-
-        // ROS connection
+        // --- ROS Configuration ---
         const ros = new ROSLIB.Ros({
             url: 'ws://' + window.location.hostname + ':9090'
         });
 
-        const statusDot = document.getElementById('status-dot');
-        const statusText = document.getElementById('status-text');
-        const pointCount = document.getElementById('point-count');
-        const rangeVal = document.getElementById('range-val');
+        const statusLight = document.getElementById('status-light');
+        const connText = document.getElementById('conn-text');
+        const sysState = document.getElementById('sys-state');
 
         ros.on('connection', () => {
-            statusDot.classList.add('connected');
-            statusText.innerText = 'Connected';
-            console.log('Connected to websocket server.');
+            statusLight.className = 'online';
+            connText.innerText = 'WebSocket: Active';
+            sysState.innerText = 'INITIALIZING';
         });
 
-        ros.on('error', (error) => {
-            statusDot.classList.remove('connected');
-            statusText.innerText = 'Error';
-            console.log('Error connecting to websocket server: ', error);
-        });
+        // --- Viewport State ---
+        let zoom = 5.0; // Viewport range in meters
+        let centerX = 0, centerY = 0; // Viewport center in meters (world space)
+        let robotX = 0, robotY = 0, robotYaw = 0; // Robot pose in world space
 
-        ros.on('close', () => {
-            statusDot.classList.remove('connected');
-            statusText.innerText = 'Closed';
-            console.log('Connection to websocket server closed.');
-        });
+        const container = document.getElementById('main-viewport');
+        const layers = {
+            grid: document.getElementById('gridLayer'),
+            map: document.getElementById('mapLayer'),
+            scan: document.getElementById('scanLayer'),
+            ui: document.getElementById('uiLayer')
+        };
+        const ctxs = Object.fromEntries(Object.entries(layers).map(([k, v]) => [k, v.getContext('2d')]));
 
-        const scanTopic = new ROSLIB.Topic({
-            ros: ros,
-            name: '/scan',
-            messageType: 'sensor_msgs/LaserScan'
-        });
+        function resize() {
+            Object.values(layers).forEach(c => {
+                c.width = container.clientWidth;
+                c.height = container.clientHeight;
+            });
+            drawGrid();
+        }
+        window.addEventListener('resize', resize);
+        resize();
 
-        scanTopic.subscribe((message) => {
-            const center = pointCanvas.width / 2;
-            pCtx.clearRect(0, 0, pointCanvas.width, pointCanvas.height);
+        // --- Coordinate Transforms ---
+        // Converts meters to pixels based on current zoom and viewport center
+        function worldToCanvas(x, y) {
+            const size = Math.min(layers.grid.width, layers.grid.height);
+            const scale = size / (zoom * 2);
             
-            const ranges = message.ranges;
-            const angleMin = message.angle_min;
-            const angleIncrement = message.angle_increment;
+            // Offset from center of viewport
+            const dx = (x - centerX) * scale;
+            const dy = (y - centerY) * scale;
             
-            let count = 0;
-            pCtx.fillStyle = '#39d353';
+            return {
+                x: (layers.grid.width / 2) + dx,
+                y: (layers.grid.height / 2) - dy // Invert Y for canvas
+            };
+        }
+
+        // --- Grid Drawing ---
+        function drawGrid() {
+            const ctx = ctxs.grid;
+            ctx.clearRect(0, 0, layers.grid.width, layers.grid.height);
             
-            for (let i = 0; i < ranges.length; i++) {
-                const r = ranges[i];
-                if (r > message.range_min && r < message.range_max) {
-                    const angle = angleMin + (i * angleIncrement);
-                    // ROS Convention: 0 is forward (+X), + angle is CCW
-                    // Canvas Convention: 0 is right, + angle is CW
-                    // We map ROS forward (+X) to Canvas Up (-Y)
-                    const x = center + (r * scale) * Math.sin(angle);
-                    const y = center - (r * scale) * Math.cos(angle);
+            const step = 1.0; // 1 meter grid
+            const size = Math.min(layers.grid.width, layers.grid.height);
+            const scale = size / (zoom * 2);
+
+            ctx.strokeStyle = 'rgba(0, 210, 255, 0.05)';
+            ctx.lineWidth = 1;
+
+            // Draw Dynamic Grid
+            const startX = Math.floor((centerX - zoom) / step) * step;
+            const endX = Math.ceil((centerX + zoom) / step) * step;
+            const startY = Math.floor((centerY - zoom) / step) * step;
+            const endY = Math.ceil((centerY + zoom) / step) * step;
+
+            for (let x = startX; x <= endX; x += step) {
+                const p = worldToCanvas(x, 0);
+                ctx.beginPath(); ctx.moveTo(p.x, 0); ctx.lineTo(p.x, layers.grid.height); ctx.stroke();
+                
+                if (Math.abs(x) < 0.01) continue;
+                ctx.fillStyle = 'rgba(139, 148, 158, 0.5)';
+                ctx.font = '10px JetBrains Mono';
+                ctx.fillText(x.toFixed(0) + 'm', p.x + 5, 20);
+            }
+
+            for (let y = startY; y <= endY; y += step) {
+                const p = worldToCanvas(0, y);
+                ctx.beginPath(); ctx.moveTo(0, p.y); ctx.lineTo(layers.grid.width, p.y); ctx.stroke();
+                
+                if (Math.abs(y) < 0.01) continue;
+                ctx.fillStyle = 'rgba(139, 148, 158, 0.5)';
+                ctx.font = '10px JetBrains Mono';
+                ctx.fillText(y.toFixed(0) + 'm', 5, p.y - 5);
+            }
+
+            // Origin Crosshair
+            const origin = worldToCanvas(0, 0);
+            ctx.strokeStyle = 'rgba(0, 210, 255, 0.3)';
+            ctx.beginPath();
+            ctx.arc(origin.x, origin.y, 4, 0, Math.PI*2);
+            ctx.stroke();
+        }
+
+        // --- LiDAR Thread ---
+        const scanTopic = new ROSLIB.Topic({ ros: ros, name: '/scan', messageType: 'sensor_msgs/LaserScan' });
+        let lastScanTime = Date.now();
+        scanTopic.subscribe(msg => {
+            const now = Date.now();
+            document.getElementById('scan-hz').innerText = (1000 / (now - lastScanTime)).toFixed(1);
+            lastScanTime = now;
+
+            const ctx = ctxs.scan;
+            ctx.clearRect(0, 0, layers.scan.width, layers.scan.height);
+            
+            ctx.fillStyle = '#39d353';
+            const angleMin = msg.angle_min;
+            const angleInc = msg.angle_increment;
+
+            for (let i = 0; i < msg.ranges.length; i++) {
+                const r = msg.ranges[i];
+                if (r > msg.range_min && r < msg.range_max) {
+                    const angle = angleMin + (i * angleInc) + robotYaw;
+                    const lx = robotX + r * Math.sin(angle);
+                    const ly = robotY + r * Math.cos(angle);
                     
-                    pCtx.beginPath();
-                    pCtx.arc(x, y, 2, 0, Math.PI * 2);
-                    pCtx.fill();
-                    count++;
+                    const p = worldToCanvas(lx, ly);
+                    ctx.beginPath();
+                    ctx.arc(p.x, p.y, 1.5, 0, Math.PI*2);
+                    ctx.fill();
                 }
             }
-            pointCount.innerText = count;
+            sysState.innerText = 'STREAMEING';
+            drawUI();
         });
 
-        // Zoom logic
-        window.addEventListener('wheel', (e) => {
-            if (e.deltaY < 0) {
-                viewRange = Math.max(1, viewRange - 0.5);
-            } else {
-                viewRange = Math.min(20, viewRange + 0.5);
+        // --- TF Thread (Pose Tracking) ---
+        const tfClient = new ROSLIB.TFClient({
+            ros: ros,
+            fixedFrame: 'map',
+            angularThres: 0.01,
+            transThres: 0.01
+        });
+
+        tfClient.subscribe('base_link', (tf) => {
+            robotX = tf.translation.x;
+            robotY = tf.translation.y;
+            
+            // Convert quaternion to yaw
+            const q = tf.rotation;
+            robotYaw = Math.atan2(2 * (q.w * q.z + q.x * q.y), 1 - 2 * (q.y * q.y + q.z * q.z));
+            
+            // Follow robot with camera
+            centerX = robotX;
+            centerY = robotY;
+
+            document.getElementById('pose-x').innerText = robotX.toFixed(3) + ' m';
+            document.getElementById('pose-y').innerText = robotY.toFixed(3) + ' m';
+            document.getElementById('pose-yaw').innerText = (robotYaw * 180 / Math.PI).toFixed(1) + '°';
+            
+            drawGrid();
+        });
+
+        // --- Map Thread ---
+        const mapTopic = new ROSLIB.Topic({ ros: ros, name: '/map', messageType: 'nav_msgs/OccupancyGrid' });
+        let mapCanvas = document.createElement('canvas');
+        mapTopic.subscribe(msg => {
+            document.getElementById('map-time').innerText = new Date().toLocaleTimeString();
+            const info = msg.info;
+            const data = msg.data;
+            
+            mapCanvas.width = info.width;
+            mapCanvas.height = info.height;
+            const mCtx = mapCanvas.getContext('2d');
+            const imgData = mCtx.createImageData(info.width, info.height);
+
+            for(let i=0; i<data.length; i++) {
+                const val = data[i];
+                const idx = i * 4;
+                if (val === -1) { // Unknown
+                    imgData.data[idx] = 10; imgData.data[idx+1] = 15; imgData.data[idx+2] = 20; imgData.data[idx+3] = 255;
+                } else {
+                    const color = 255 - (val * 2.55);
+                    imgData.data[idx] = color * 0.2; // Tint maps blue
+                    imgData.data[idx+1] = color * 0.4;
+                    imgData.data[idx+2] = color * 0.6;
+                    imgData.data[idx+3] = 255;
+                }
             }
-            scale = (gridCanvas.width / 2) / viewRange;
-            rangeVal.innerText = viewRange.toFixed(1);
+            mCtx.putImageData(imgData, 0, 0);
+            renderMap(info);
+        });
+
+        function renderMap(info) {
+            const ctx = ctxs.map;
+            ctx.clearRect(0,0, layers.map.width, layers.map.height);
+            
+            const size = Math.min(layers.grid.width, layers.grid.height);
+            const scale = size / (zoom * 2);
+            
+            // Origin of map in world space
+            const ox = info.origin.position.x;
+            const oy = info.origin.position.y;
+            const p = worldToCanvas(ox, oy);
+            
+            const w = info.width * info.resolution * scale;
+            const h = info.height * info.resolution * scale;
+            
+            ctx.save();
+            ctx.translate(p.x, p.y);
+            ctx.scale(1, -1); // Map is row-major bottom-up in ROS
+            ctx.drawImage(mapCanvas, 0, 0, w, h);
+            ctx.restore();
+        }
+
+        // --- UI Layer (Robot Indicator) ---
+        function drawUI() {
+            const ctx = ctxs.ui;
+            ctx.clearRect(0,0, layers.ui.width, layers.ui.height);
+            
+            const p = worldToCanvas(robotX, robotY);
+            
+            ctx.save();
+            ctx.translate(p.x, p.y);
+            ctx.rotate(-robotYaw); // Canvas rotates Clockwise
+            
+            // Robot Body
+            ctx.fillStyle = 'white';
+            ctx.beginPath();
+            ctx.moveTo(0, -10); // Nose
+            ctx.lineTo(7, 8);
+            ctx.lineTo(-7, 8);
+            ctx.closePath();
+            ctx.fill();
+            
+            // Glow
+            ctx.shadowBlur = 15;
+            ctx.shadowColor = var(--accent);
+            ctx.strokeStyle = var(--accent);
+            ctx.lineWidth = 2;
+            ctx.stroke();
+            
+            ctx.restore();
+        }
+
+        // --- Interaction ---
+        container.addEventListener('wheel', (e) => {
+            e.preventDefault();
+            if (e.deltaY < 0) zoom = Math.max(1, zoom * 0.9);
+            else zoom = Math.min(50, zoom * 1.1);
+            document.getElementById('zoom-text').innerText = zoom.toFixed(1) + 'm';
             drawGrid();
         });
     </script>

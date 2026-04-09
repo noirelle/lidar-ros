@@ -58,7 +58,14 @@ def generate_launch_description():
             arguments=['0', '0', '0', '0', '0', '0', 'odom', 'base_link']
         ),
 
-        # 4. ROSBridge WebSocket Server
+        # 4. TF Web Republisher (Required for roslibjs TFClient)
+        Node(
+            package='tf2_web_republisher',
+            executable='tf2_web_republisher',
+            name='tf2_web_republisher'
+        ),
+
+        # 5. ROSBridge WebSocket Server
         IncludeLaunchDescription(
             AnyLaunchDescriptionSource(bridge_launch_path),
             launch_arguments={'port': '9090'}.items()

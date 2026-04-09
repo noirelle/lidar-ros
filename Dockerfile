@@ -7,6 +7,7 @@ RUN apt update && apt install -y \
     git \
     ros-humble-slam-toolbox \
     ros-humble-rosbridge-suite \
+    ros-humble-tf2-web-republisher \
     python3-colcon-common-extensions \
     python3-pip \
     unzip \

@@ -217,18 +217,15 @@
             url: 'ws://' + window.location.hostname + ':9090'
         });
 
-        const statusDot = document.getElementById('status-dot');
         const connText = document.getElementById('conn-text');
         const sysState = document.getElementById('sys-state');
 
         ros.on('connection', () => {
-            statusDot.className = 'online';
             connText.innerText = 'CONNECTED';
             sysState.innerText = 'STREAMING';
         });
 
         ros.on('close', () => {
-            statusDot.className = '';
             connText.innerText = 'DISCONNECTED';
             sysState.innerText = 'STANDBY';
         });

@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ROS2 Fake LiDAR Visualization</title>
+    <!-- Include roslibjs -->
+    <script src="https://cdn.jsdelivr.net/npm/roslib@1/build/roslib.min.js"></script>
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #0f172a;
+            color: #f8fafc;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            margin: 0;
+            overflow: hidden;
+        }
+
+        h1 {
+            margin-bottom: 5px;
+            font-weight: 600;
+        }
+
+        #status {
+            margin-bottom: 20px;
+            padding: 5px 15px;
+            border-radius: 9999px;
+            background-color: #334155;
+            font-size: 0.9em;
+            transition: background-color 0.3s ease;
+        }
+
+        .connected {
+            background-color: #059669 !important;
+        }
+
+        .error {
+            background-color: #dc2626 !important;
+        }
+
+        canvas {
+            background-color: #1e293b;
+            border: 2px solid #334155;
+            border-radius: 16px;
+            box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
+        }
+    </style>
+</head>
+<body>
+
+    <h1>LiDAR Stream</h1>
+    <div id="status">Connecting to Bridge...</div>
+    <canvas id="lidarCanvas" width="600" height="600"></canvas>
+
+    <script>
+        const statusEl = document.getElementById('status');
+        const canvas = document.getElementById('lidarCanvas');
+        const ctx = canvas.getContext('2d');
+        const center = { x: canvas.width / 2, y: canvas.height / 2 };
+        const pixelsPerMeter = 60; // Scale factor
+
+        // Connect to ROS
+        const ros = new ROSLIB.Ros({
+            url : 'ws://localhost:9090'
+        });
+
+        ros.on('connection', function() {
+            statusEl.textContent = 'Connected to WebSocket';
+            statusEl.className = 'connected';
+            console.log('Connected to websocket server.');
+        });
+
+        ros.on('error', function(error) {
+            statusEl.textContent = 'Error connecting to WebSocket';
+            statusEl.className = 'error';
+            console.log('Error connecting to websocket server: ', error);
+        });
+
+        ros.on('close', function() {
+            statusEl.textContent = 'WebSocket connection closed';
+            statusEl.className = 'error';
+            console.log('Connection to websocket server closed.');
+        });
+
+        // Subscribe to /scan topic
+        const scanListener = new ROSLIB.Topic({
+            ros : ros,
+            name : '/scan',
+            messageType : 'sensor_msgs/LaserScan'
+        });
+
+        scanListener.subscribe(function(message) {
+            drawLidar(message);
+        });
+
+        function drawLidar(scanMsg) {
+            // Clear canvas
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            
+            // Draw grid and axes
+            ctx.strokeStyle = '#334155';
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.moveTo(0, center.y);
+            ctx.lineTo(canvas.width, center.y);
+            ctx.moveTo(center.x, 0);
+            ctx.lineTo(center.x, canvas.height);
+            ctx.stroke();
+
+            // Draw robot in center
+            ctx.fillStyle = '#38bdf8';
+            ctx.beginPath();
+            ctx.arc(center.x, center.y, 5, 0, 2 * Math.PI);
+            ctx.fill();
+
+            // Draw LiDAR points
+            ctx.fillStyle = '#10b981'; // vibrant green
+
+            for (let i = 0; i < scanMsg.ranges.length; i++) {
+                const range = scanMsg.ranges[i];
+                
+                // Skip invalid points
+                if (range < scanMsg.range_min || range > scanMsg.range_max) {
+                    continue;
+                }
+
+                // Calculate angle for this reading
+                const angle = scanMsg.angle_min + (i * scanMsg.angle_increment);
+                
+                // Polar to Cartesian conversion
+                // Standard ROS convention: x forward, y left
+                const x = range * Math.cos(angle);
+                const y = range * Math.sin(angle);
+                
+                // Map to canvas coordinates
+                // We rotate -90 deg so Robot faces UP visually 
+                const canvasX = center.x - (y * pixelsPerMeter);
+                const canvasY = center.y - (x * pixelsPerMeter);
+
+                // Draw point
+                ctx.beginPath();
+                ctx.arc(canvasX, canvasY, 2, 0, 2 * Math.PI);
+                ctx.fill();
+            }
+        }
+    </script>
+</body>
+</html>

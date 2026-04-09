@@ -134,18 +134,27 @@
             letter-spacing: 1px;
         }
 
-        /* Removed Version Tag */
+        .version-tag {
+            position: fixed;
+            top: 10px;
+            right: 170px;
+            font-family: monospace;
+            font-size: 0.7rem;
+            color: rgba(0,0,0,0.3);
+        }
 
         #status-dot.online { background: var(--accent); }
     </style>
 </head>
 <body>
 
-    <main>
+    <div class="version-tag">UI_VER: 2.0.4 [STABLE]</div>
+
+    <aside>
         <div class="logo">
             LIDAR SYSTEM
         </div>
-        
+
         <div class="telemetry-card">
             <h3>Diagnostic</h3>
             <div class="data-row">
@@ -159,6 +168,10 @@
             <div class="data-row">
                 <span class="data-label">Hz</span>
                 <span class="data-value" id="scan-hz">0.00</span>
+            </div>
+            <div class="data-row">
+                <span class="data-label">Pulse</span>
+                <span class="data-value" id="data-pulse">---</span>
             </div>
         </div>
 
@@ -352,10 +365,15 @@
 
         tfTopic.subscribe(msg => {
             msg.transforms.forEach(transform => {
+                // We are looking for the 'map' -> 'odom' or 'map' -> 'base_link' jump
                 if (transform.header.frame_id === 'map' || transform.header.frame_id === '/map') {
+                    const now = new Date();
+                    dataPulse.innerText = now.toLocaleTimeString() + ' [TF_LIVE]';
+
                     const pos = transform.transform.translation;
                     const rot = transform.transform.rotation;
                     
+                    // Update global UI state
                     robotX = pos.x;
                     robotY = pos.y;
                     const q = rot;
@@ -364,20 +382,16 @@
                     centerX = robotX;
                     centerY = robotY;
 
+                    // Update DOM
                     document.getElementById('pose-x').innerText = robotX.toFixed(3);
                     document.getElementById('pose-y').innerText = robotY.toFixed(3);
                     document.getElementById('pose-yaw').innerText = (robotYaw * 180 / Math.PI).toFixed(2);
+                    
+                    drawGrid();
+                    renderMap();
                 }
             });
         });
-
-        // --- Optimized Smooth Rendering Engine ---
-        function animate() {
-            drawGrid();
-            renderMap();
-            requestAnimationFrame(animate);
-        }
-        animate();
 
         // --- Mapping (Unified Point Cloud Style) ---
         const mapTopic = new ROSLIB.Topic({ ros: ros, name: '/map', messageType: 'nav_msgs/OccupancyGrid' });

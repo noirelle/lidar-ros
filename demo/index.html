@@ -366,11 +366,13 @@
             document.getElementById('pose-yaw').innerText = (robotYaw * 180 / Math.PI).toFixed(2);
             
             drawGrid();
+            renderMap(); // Re-render map points on pose change
         });
 
-        // --- Mapping (Grayscale Tiles) ---
+        // --- Mapping (Unified Point Cloud Style) ---
         const mapTopic = new ROSLIB.Topic({ ros: ros, name: '/map', messageType: 'nav_msgs/OccupancyGrid' });
-        let mapCanvas = document.createElement('canvas');
+        let occupiedPoints = []; // Store world coordinates of walls
+
         mapTopic.subscribe(msg => {
             const info = msg.info;
             const data = msg.data;
@@ -378,52 +380,31 @@
             document.getElementById('map-size').innerText = 
                 (info.width * info.resolution).toFixed(1) + 'x' + (info.height * info.resolution).toFixed(1) + ' m';
 
-            mapCanvas.width = info.width;
-            mapCanvas.height = info.height;
-            const mCtx = mapCanvas.getContext('2d');
-            mCtx.imageSmoothingEnabled = false; // Disable on data source
-            const imgData = mCtx.createImageData(info.width, info.height);
-
-            for(let i=0; i<data.length; i++) {
-                const val = data[i];
-                const idx = i * 4;
-                if (val > 50) { // Occupied (Wall)
-                    imgData.data[idx] = 0; 
-                    imgData.data[idx+1] = 0;
-                    imgData.data[idx+2] = 0;
-                    imgData.data[idx+3] = 255; // Solid Black
-                } else { // Free or Unknown
-                    imgData.data[idx] = 0;
-                    imgData.data[idx+1] = 0;
-                    imgData.data[idx+2] = 0;
-                    imgData.data[idx+3] = 0; // Completely Transparent
+            // Extract occupied cells into a point list (Meters)
+            occupiedPoints = [];
+            for (let i = 0; i < data.length; i++) {
+                if (data[i] > 50) { // Occupancy threshold
+                    const x_idx = i % info.width;
+                    const y_idx = Math.floor(i / info.width);
+                    
+                    // Convert to map world space
+                    const wx = x_idx * info.resolution + info.origin.position.x;
+                    const wy = y_idx * info.resolution + info.origin.position.y;
+                    occupiedPoints.push({ x: wx, y: wy });
                 }
             }
-            mCtx.putImageData(imgData, 0, 0);
-            renderMap(info);
+            renderMap();
         });
 
-        function renderMap(info) {
+        function renderMap() {
             const ctx = ctxs.map;
             ctx.clearRect(0,0, layers.map.width, layers.map.height);
             
-            const size = Math.min(layers.grid.width, layers.grid.height);
-            const scale = size / (zoom * 2);
-            
-            const ox = info.origin.position.x;
-            const oy = info.origin.position.y;
-            const p = worldToCanvas(ox, oy);
-            
-            const w = info.width * info.resolution * scale;
-            const h = info.height * info.resolution * scale;
-            
-            ctx.save();
-            ctx.imageSmoothingEnabled = false; // Double-enforce before draw
-            ctx.translate(p.x, p.y);
-            ctx.scale(1, -1);
-            ctx.globalAlpha = 1.0;
-            ctx.drawImage(mapCanvas, 0, 0, w, h);
-            ctx.restore();
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.4)'; // Subtler color for built map
+            occupiedPoints.forEach(p => {
+                const canvasP = worldToCanvas(p.x, p.y);
+                ctx.fillRect(canvasP.x - 1, canvasP.y - 1, 2, 2);
+            });
         }
 
         // --- Robot Indicator (Minimalist Triangle) ---

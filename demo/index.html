@@ -43,18 +43,6 @@
             box-shadow: 4px 0 15px rgba(0,0,0,0.02);
         }
 
-        .logo {
-            font-size: 1rem;
-            font-weight: 900;
-            letter-spacing: 3px;
-            background: var(--accent);
-            color: var(--panel-bg);
-            padding: 8px 16px;
-            text-transform: uppercase;
-            display: inline-block;
-            width: fit-content;
-        }
-
         .telemetry-card {
             display: flex;
             flex-direction: column;
@@ -107,53 +95,56 @@
             image-rendering: pixelated; /* Crisp rendering for Technical Map */
         }
 
-        /* HUD Overlay */
-        .hud-info {
-            position: absolute;
-            top: 24px;
-            right: 24px;
-            background: var(--panel-bg);
-            padding: 12px 20px;
-            border: 1px solid var(--accent);
-            font-size: 0.75rem;
-            letter-spacing: 1px;
-            text-transform: uppercase;
-            font-weight: bold;
-        }
-
-        .hud-bottom {
-            position: absolute;
-            bottom: 24px;
-            left: 50%;
-            transform: translateX(-50%);
-            display: flex;
-            gap: 24px;
-            font-size: 0.7rem;
-            color: var(--text-muted);
-            text-transform: uppercase;
-            letter-spacing: 1px;
-        }
-
-        .version-tag {
-            position: fixed;
-            top: 10px;
-            right: 170px;
-            font-family: monospace;
-            font-size: 0.7rem;
-            color: rgba(0,0,0,0.3);
-        }
-
         #status-dot.online { background: var(--accent); }
+
+        /* Compass Styling */
+        .compass {
+            position: absolute;
+            bottom: 32px;
+            right: 32px;
+            width: 80px;
+            height: 80px;
+            border: 1px solid var(--accent);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: var(--panel-bg);
+            box-shadow: 0 4px 15px rgba(0,0,0,0.05);
+            z-index: 50;
+        }
+
+        .compass::before {
+            content: 'N';
+            position: absolute;
+            top: 6px;
+            font-size: 0.7rem;
+            font-weight: 900;
+            color: var(--accent);
+        }
+
+        .compass-needle {
+            width: 2px;
+            height: 50px;
+            background: rgba(0,0,0,0.1);
+            position: relative;
+            transform-origin: center center;
+        }
+
+        .compass-needle::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -4px;
+            border-left: 5px solid transparent;
+            border-right: 5px solid transparent;
+            border-bottom: 12px solid var(--accent);
+        }
     </style>
 </head>
 <body>
 
-    <div class="version-tag">UI_VER: 2.0.4 [STABLE]</div>
-
     <aside>
-        <div class="logo">
-            LIDAR SYSTEM
-        </div>
 
         <div class="telemetry-card">
             <h3>Diagnostic</h3>
@@ -212,13 +203,8 @@
             <canvas id="uiLayer"></canvas>
         </div>
 
-        <div class="hud-info">
-            AUTO-SCAN: ACTIVE
-        </div>
-
-        <div class="hud-bottom">
-            <div><span id="conn-label">WS-LINK</span></div>
-            <div>COORDINATE_SYS: MAP_RELATIVE</div>
+        <div class="compass">
+            <div id="compass-needle" class="compass-needle"></div>
         </div>
     </main>
 
@@ -231,6 +217,7 @@
         const connText = document.getElementById('conn-text');
         const sysState = document.getElementById('sys-state');
         const dataPulse = document.getElementById('data-pulse');
+        const compassNeedle = document.getElementById('compass-needle');
 
         ros.on('connection', () => {
             connText.innerText = 'CONNECTED';
@@ -494,6 +481,11 @@
             // Always redraw indicator and scan for maximum fluid motion
             drawUI();
             drawScan();
+
+            // Update Compass
+            if (compassNeedle) {
+                compassNeedle.style.transform = `rotate(${-current.yaw}rad)`;
+            }
 
             // Grid and Map only redraw on significant change or explicit flag
             if (uiState.needsRedraw.grid || Math.abs(dyaw) > 0.001) {

@@ -12,9 +12,9 @@ slam_toolbox:
     debug_logging: false
     throttle_scans: 1
     transform_publish_period: 0.02 # 50Hz
-    map_update_interval: 1.0 # 1Hz (was 2s)
+    map_update_interval: 0.5 # Faster updates for clearing dynamic ghosts
     resolution: 0.05
-    max_laser_range: 12.0
+    max_laser_range: 8.0 # Tuned for X3 stability (12m is often too noisy at edges)
     minimum_time_interval: 0.5
     transform_timeout: 0.2
     tf_buffer_duration: 30.0
@@ -24,10 +24,10 @@ slam_toolbox:
     # Scan Matcher Parameters
     use_scan_matching: true
     use_scan_barycenter: true
-    minimum_travel_distance: 0.0 # High sensitivity
-    minimum_travel_heading: 0.0  # High sensitivity
-    scan_buffer_size: 10
-    scan_buffer_maximum_scan_distance: 10.0
+    minimum_travel_distance: 0.15 # Prevent "burning in" ghosts while stationary
+    minimum_travel_heading: 0.15 # Approx 8.5 degrees
+    scan_buffer_size: 15 # Slightly larger buffer for better matching stability
+    scan_buffer_maximum_scan_distance: 8.0
     link_match_maximum_distance: 2.0
     link_scan_maximum_distance: 1.5
     loop_search_maximum_distance: 3.0

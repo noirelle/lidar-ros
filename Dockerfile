@@ -7,6 +7,7 @@ RUN apt update && apt install -y \
     git \
     ros-humble-slam-toolbox \
     ros-humble-rosbridge-suite \
+    ros-humble-tf2-web-republisher \
     python3-colcon-common-extensions \
     python3-pip \
     unzip \
@@ -27,8 +28,9 @@ COPY bundles/ydlidar_ros2_bundle.zip /app/ros2_ws/src/
 RUN unzip /app/ros2_ws/src/ydlidar_ros2_bundle.zip -d /app/ros2_ws/src/ && \
     rm /app/ros2_ws/src/ydlidar_ros2_bundle.zip
 
-# Copy launch and demo files
+# Copy launch, params and demo files
 COPY launch /app/ros2_ws/launch
+COPY params /app/ros2_ws/params
 COPY demo /app/demo
 
 WORKDIR /app/ros2_ws

@@ -223,46 +223,30 @@
     </main>
 
     <script>
-        // --- State Management ---
-        const state = {
-            connected: false,
-            robot: { x: 0, y: 0, yaw: 0 },
-            view: { zoom: 5.0, centerX: 0, centerY: 0 },
-            scan: { points: [], hz: 0, lastTime: Date.now() },
-            map: { points: [], size: '0.0x0.0 m' },
-            status: { conn: 'DISCONNECTED', sys: 'STANDBY', pulse: '---' }
-        };
-
         // --- ROS Configuration ---
         const ros = new ROSLIB.Ros({
             url: 'ws://' + window.location.hostname + ':9090'
         });
 
-        const dom = {
-            connText: document.getElementById('conn-text'),
-            sysState: document.getElementById('sys-state'),
-            scanHz: document.getElementById('scan-hz'),
-            dataPulse: document.getElementById('data-pulse'),
-            poseX: document.getElementById('pose-x'),
-            poseY: document.getElementById('pose-y'),
-            poseYaw: document.getElementById('pose-yaw'),
-            mapSize: document.getElementById('map-size'),
-            zoomText: document.getElementById('zoom-text')
-        };
+        const connText = document.getElementById('conn-text');
+        const sysState = document.getElementById('sys-state');
+        const dataPulse = document.getElementById('data-pulse');
 
         ros.on('connection', () => {
-            state.connected = true;
-            state.status.conn = 'CONNECTED';
-            state.status.sys = 'STREAMING';
+            connText.innerText = 'CONNECTED';
+            sysState.innerText = 'STREAMING';
         });
 
         ros.on('close', () => {
-            state.connected = false;
-            state.status.conn = 'DISCONNECTED';
-            state.status.sys = 'STANDBY';
+            connText.innerText = 'DISCONNECTED';
+            sysState.innerText = 'STANDBY';
         });
 
-        // --- Viewport & Layers ---
+        // --- Viewport State ---
+        let zoom = 5.0; 
+        let centerX = 0, centerY = 0; 
+        let robotX = 0, robotY = 0, robotYaw = 0;
+
         const container = document.getElementById('main-viewport');
         const layers = {
             grid: document.getElementById('gridLayer'),
@@ -272,7 +256,7 @@
         };
         const ctxs = Object.fromEntries(Object.entries(layers).map(([k, v]) => {
             const ctx = v.getContext('2d');
-            ctx.imageSmoothingEnabled = false;
+            ctx.imageSmoothingEnabled = false; // Disable blurring for technical precision
             return [k, ctx];
         }));
 
@@ -280,157 +264,202 @@
             Object.values(layers).forEach(c => {
                 c.width = container.clientWidth;
                 c.height = container.clientHeight;
-                c.getContext('2d').imageSmoothingEnabled = false;
+                const ctx = c.getContext('2d');
+                ctx.imageSmoothingEnabled = false; // Re-disable on resize
             });
+            drawGrid();
         }
         window.addEventListener('resize', resize);
         resize();
 
         function worldToCanvas(x, y) {
             const size = Math.min(layers.grid.width, layers.grid.height);
-            const scale = size / (state.view.zoom * 2);
-            const dx = (x - state.view.centerX) * scale;
-            const dy = (y - state.view.centerY) * scale;
+            const scale = size / (zoom * 2);
+            const dx = (x - centerX) * scale;
+            const dy = (y - centerY) * scale;
             return {
                 x: Math.round((layers.grid.width / 2) + dx),
                 y: Math.round((layers.grid.height / 2) - dy)
             };
         }
 
-        // --- ROS Subscriptions (State Updates Only) ---
+        // --- Grid Drawing (Blueprint Style) ---
+        function drawGrid() {
+            const ctx = ctxs.grid;
+            ctx.clearRect(0, 0, layers.grid.width, layers.grid.height);
+            
+            const step = 1.0; 
+            const size = Math.min(layers.grid.width, layers.grid.height);
+            const scale = size / (zoom * 2);
+
+            ctx.strokeStyle = '#e0e0e0';
+            ctx.lineWidth = 1;
+
+            const startX = Math.floor((centerX - zoom) / step) * step;
+            const endX = Math.ceil((centerX + zoom) / step) * step;
+            const startY = Math.floor((centerY - zoom) / step) * step;
+            const endY = Math.ceil((centerY + zoom) / step) * step;
+
+            for (let x = startX; x <= endX; x += step) {
+                const p = worldToCanvas(x, 0);
+                ctx.beginPath(); ctx.moveTo(p.x, 0); ctx.lineTo(p.x, layers.grid.height); ctx.stroke();
+                
+                ctx.fillStyle = '#757575';
+                ctx.font = '8px monospace';
+                ctx.fillText(x.toFixed(0), p.x + 4, 15);
+            }
+
+            for (let y = startY; y <= endY; y += step) {
+                const p = worldToCanvas(0, y);
+                ctx.beginPath(); ctx.moveTo(0, p.y); ctx.lineTo(layers.grid.width, p.y); ctx.stroke();
+                
+                ctx.fillStyle = '#757575';
+                ctx.font = '8px monospace';
+                ctx.fillText(y.toFixed(0), 10, p.y - 4);
+            }
+
+            // Central Axes
+            const origin = worldToCanvas(0, 0);
+            ctx.strokeStyle = '#000000';
+            ctx.lineWidth = 0.5;
+            ctx.beginPath();
+            ctx.arc(origin.x, origin.y, 3, 0, Math.PI*2);
+            ctx.stroke();
+        }
+
+        // --- Scan Logic (Black Points) ---
         const scanTopic = new ROSLIB.Topic({ ros: ros, name: '/scan', messageType: 'sensor_msgs/LaserScan' });
+        let lastScanTime = Date.now();
         scanTopic.subscribe(msg => {
             const now = Date.now();
-            state.scan.hz = (1000 / (now - state.scan.lastTime)).toFixed(2);
-            state.scan.lastTime = now;
+            document.getElementById('scan-hz').innerText = (1000 / (now - lastScanTime)).toFixed(2);
+            lastScanTime = now;
 
-            const newPoints = [];
+            const ctx = ctxs.scan;
+            ctx.clearRect(0, 0, layers.scan.width, layers.scan.height);
+            
+            ctx.fillStyle = '#000000';
             const angleMin = msg.angle_min;
             const angleInc = msg.angle_increment;
 
             for (let i = 0; i < msg.ranges.length; i++) {
                 const r = msg.ranges[i];
                 if (r > msg.range_min && r < msg.range_max) {
-                    const angle = angleMin + (i * angleInc) + state.robot.yaw;
-                    newPoints.push({
-                        x: state.robot.x + r * Math.sin(angle),
-                        y: state.robot.y + r * Math.cos(angle)
-                    });
+                    const angle = angleMin + (i * angleInc) + robotYaw;
+                    const lx = robotX + r * Math.sin(angle);
+                    const ly = robotY + r * Math.cos(angle);
+                    
+                    const p = worldToCanvas(lx, ly);
+                    ctx.fillRect(p.x-1, p.y-1, 2, 2);
                 }
             }
-            state.scan.points = newPoints;
+            drawUI();
         });
 
-        const tfTopic = new ROSLIB.Topic({ ros: ros, name: '/tf', messageType: 'tf2_msgs/msg/TFMessage' });
+        // --- High-Priority Raw TF Telemetry ---
+        const tfTopic = new ROSLIB.Topic({
+            ros: ros,
+            name: '/tf',
+            messageType: 'tf2_msgs/msg/TFMessage'
+        });
+
         tfTopic.subscribe(msg => {
-            msg.transforms.forEach(t => {
-                if (t.header.frame_id === 'map' || t.header.frame_id === '/map') {
-                    state.status.pulse = new Date().toLocaleTimeString() + ' [TF_LIVE]';
-                    state.robot.x = t.transform.translation.x;
-                    state.robot.y = t.transform.translation.y;
-                    const q = t.transform.rotation;
-                    state.robot.yaw = Math.atan2(2 * (q.w * q.z + q.x * q.y), 1 - 2 * (q.y * q.y + q.z * q.z));
+            msg.transforms.forEach(transform => {
+                // We are looking for the 'map' -> 'odom' or 'map' -> 'base_link' jump
+                if (transform.header.frame_id === 'map' || transform.header.frame_id === '/map') {
+                    const now = new Date();
+                    dataPulse.innerText = now.toLocaleTimeString() + ' [TF_LIVE]';
+
+                    const pos = transform.transform.translation;
+                    const rot = transform.transform.rotation;
                     
-                    state.view.centerX = state.robot.x;
-                    state.view.centerY = state.robot.y;
+                    // Update global UI state
+                    robotX = pos.x;
+                    robotY = pos.y;
+                    const q = rot;
+                    robotYaw = Math.atan2(2 * (q.w * q.z + q.x * q.y), 1 - 2 * (q.y * q.y + q.z * q.z));
+                    
+                    centerX = robotX;
+                    centerY = robotY;
+
+                    // Update DOM
+                    document.getElementById('pose-x').innerText = robotX.toFixed(3);
+                    document.getElementById('pose-y').innerText = robotY.toFixed(3);
+                    document.getElementById('pose-yaw').innerText = (robotYaw * 180 / Math.PI).toFixed(2);
+                    
+                    drawGrid();
+                    renderMap();
                 }
             });
         });
 
+        // --- Mapping (Unified Point Cloud Style) ---
         const mapTopic = new ROSLIB.Topic({ ros: ros, name: '/map', messageType: 'nav_msgs/OccupancyGrid' });
+        let occupiedPoints = []; // Store world coordinates of walls
+
         mapTopic.subscribe(msg => {
             const info = msg.info;
             const data = msg.data;
-            state.map.size = (info.width * info.resolution).toFixed(1) + 'x' + (info.height * info.resolution).toFixed(1) + ' m';
+            
+            document.getElementById('map-size').innerText = 
+                (info.width * info.resolution).toFixed(1) + 'x' + (info.height * info.resolution).toFixed(1) + ' m';
 
-            const newMap = [];
+            // Extract occupied cells into a point list (Meters)
+            occupiedPoints = [];
             for (let i = 0; i < data.length; i++) {
-                if (data[i] > 50) {
-                    newMap.push({
-                        x: (i % info.width) * info.resolution + info.origin.position.x,
-                        y: Math.floor(i / info.width) * info.resolution + info.origin.position.y
-                    });
+                if (data[i] > 50) { // Occupancy threshold
+                    const x_idx = i % info.width;
+                    const y_idx = Math.floor(i / info.width);
+                    
+                    // Convert to map world space
+                    const wx = x_idx * info.resolution + info.origin.position.x;
+                    const wy = y_idx * info.resolution + info.origin.position.y;
+                    occupiedPoints.push({ x: wx, y: wy });
                 }
             }
-            state.map.points = newMap;
+            renderMap();
         });
 
-        // --- Rendering Logic (Synchronized) ---
-        function render() {
-            // Update DOM Elements
-            dom.connText.innerText = state.status.conn;
-            dom.sysState.innerText = state.status.sys;
-            dom.scanHz.innerText = state.scan.hz;
-            dom.dataPulse.innerText = state.status.pulse;
-            dom.poseX.innerText = state.robot.x.toFixed(3);
-            dom.poseY.innerText = state.robot.y.toFixed(3);
-            dom.poseYaw.innerText = (state.robot.yaw * 180 / Math.PI).toFixed(2);
-            dom.mapSize.innerText = state.map.size;
-            dom.zoomText.innerText = state.view.zoom.toFixed(1) + 'm';
-
-            // 1. Grid Layer
-            const gCtx = ctxs.grid;
-            gCtx.clearRect(0, 0, layers.grid.width, layers.grid.height);
-            const step = 1.0;
-            gCtx.strokeStyle = '#e0e0e0';
-            gCtx.lineWidth = 1;
-            const startX = Math.floor((state.view.centerX - state.view.zoom) / step) * step;
-            const endX = Math.ceil((state.view.centerX + state.view.zoom) / step) * step;
-            const startY = Math.floor((state.view.centerY - state.view.zoom) / step) * step;
-            const endY = Math.ceil((state.view.centerY + state.view.zoom) / step) * step;
-
-            for (let x = startX; x <= endX; x += step) {
-                const p = worldToCanvas(x, 0);
-                gCtx.beginPath(); gCtx.moveTo(p.x, 0); gCtx.lineTo(p.x, layers.grid.height); gCtx.stroke();
-            }
-            for (let y = startY; y <= endY; y += step) {
-                const p = worldToCanvas(0, y);
-                gCtx.beginPath(); gCtx.moveTo(0, p.y); gCtx.lineTo(layers.grid.width, p.y); gCtx.stroke();
-            }
-
-            // 2. Map Layer (The static built map)
-            const mCtx = ctxs.map;
-            mCtx.clearRect(0, 0, layers.map.width, layers.map.height);
-            mCtx.fillStyle = 'rgba(0, 0, 0, 0.4)';
-            state.map.points.forEach(p => {
-                const cp = worldToCanvas(p.x, p.y);
-                mCtx.fillRect(cp.x - 1, cp.y - 1, 2, 2);
+        function renderMap() {
+            const ctx = ctxs.map;
+            ctx.clearRect(0,0, layers.map.width, layers.map.height);
+            
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.4)'; // Subtler color for built map
+            occupiedPoints.forEach(p => {
+                const canvasP = worldToCanvas(p.x, p.y);
+                ctx.fillRect(canvasP.x - 1, canvasP.y - 1, 2, 2);
             });
-
-            // 3. Scan Layer (Live points)
-            const sCtx = ctxs.scan;
-            sCtx.clearRect(0, 0, layers.scan.width, layers.scan.height);
-            sCtx.fillStyle = '#000000';
-            state.scan.points.forEach(p => {
-                const cp = worldToCanvas(p.x, p.y);
-                sCtx.fillRect(cp.x - 1, cp.y - 1, 2, 2);
-            });
-
-            // 4. UI Layer (Robot)
-            const uCtx = ctxs.ui;
-            uCtx.clearRect(0, 0, layers.ui.width, layers.ui.height);
-            const rp = worldToCanvas(state.robot.x, state.robot.y);
-            uCtx.save();
-            uCtx.translate(rp.x, rp.y);
-            uCtx.rotate(-state.robot.yaw);
-            uCtx.fillStyle = '#000000';
-            uCtx.beginPath();
-            uCtx.moveTo(0, -8); uCtx.lineTo(6, 6); uCtx.lineTo(-6, 6); uCtx.closePath();
-            uCtx.fill();
-            uCtx.restore();
         }
 
-        function animate() {
-            render();
-            requestAnimationFrame(animate);
+        // --- Robot Indicator (Minimalist Triangle) ---
+        function drawUI() {
+            const ctx = ctxs.ui;
+            ctx.clearRect(0,0, layers.ui.width, layers.ui.height);
+            
+            const p = worldToCanvas(robotX, robotY);
+            
+            ctx.save();
+            ctx.translate(p.x, p.y);
+            ctx.rotate(-robotYaw);
+            
+            ctx.fillStyle = '#000000';
+            ctx.beginPath();
+            ctx.moveTo(0, -8);
+            ctx.lineTo(6, 6);
+            ctx.lineTo(-6, 6);
+            ctx.closePath();
+            ctx.fill();
+            
+            ctx.restore();
         }
-        requestAnimationFrame(animate);
 
         // --- Interaction ---
         container.addEventListener('wheel', (e) => {
             e.preventDefault();
-            if (e.deltaY < 0) state.view.zoom = Math.max(1, state.view.zoom * 0.9);
-            else state.view.zoom = Math.min(100, state.view.zoom * 1.1);
+            if (e.deltaY < 0) zoom = Math.max(1, zoom * 0.9);
+            else zoom = Math.min(100, zoom * 1.1);
+            document.getElementById('zoom-text').innerText = zoom.toFixed(1) + 'm';
+            drawGrid();
         });
     </script>
 </body>

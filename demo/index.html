@@ -242,10 +242,15 @@
             sysState.innerText = 'STANDBY';
         });
 
-        // --- Viewport State ---
+        // --- Viewport State & Smooth Motion ---
         let zoom = 5.0; 
         let centerX = 0, centerY = 0; 
-        let robotX = 0, robotY = 0, robotYaw = 0;
+        
+        // Target state (from ROS)
+        const target = { x: 0, y: 0, yaw: 0 };
+        // Current state (smoothed for display)
+        const current = { x: 0, y: 0, yaw: 0 };
+        const SMOOTH_FACTOR = 0.12; // Lower = smoother but more lag. 0.12 is a good balance.
 
         // --- UI State & Buffer ---
         const uiState = {
@@ -268,7 +273,7 @@
         };
         const ctxs = Object.fromEntries(Object.entries(layers).map(([k, v]) => {
             const ctx = v.getContext('2d');
-            ctx.imageSmoothingEnabled = false; // Disable blurring for technical precision
+            ctx.imageSmoothingEnabled = true; // Use smoothing for fluid visuals
             return [k, ctx];
         }));
 
@@ -277,7 +282,7 @@
                 c.width = container.clientWidth;
                 c.height = container.clientHeight;
                 const ctx = c.getContext('2d');
-                ctx.imageSmoothingEnabled = false; // Re-disable on resize
+                ctx.imageSmoothingEnabled = true; 
             });
             drawGrid();
         }
@@ -290,8 +295,8 @@
             const dx = (x - centerX) * scale;
             const dy = (y - centerY) * scale;
             return {
-                x: Math.round((layers.grid.width / 2) + dx),
-                y: Math.round((layers.grid.height / 2) - dy)
+                x: (layers.grid.width / 2) + dx, // Use float coordinates for sub-pixel smoothness
+                y: (layers.grid.height / 2) - dy
             };
         }
 
@@ -367,9 +372,9 @@
             for (let i = 0; i < msg.ranges.length; i++) {
                 const r = msg.ranges[i];
                 if (r > msg.range_min && r < msg.range_max) {
-                    const angle = angleMin + (i * angleInc) + robotYaw;
-                    const lx = robotX + r * Math.sin(angle);
-                    const ly = robotY + r * Math.cos(angle);
+                    const angle = angleMin + (i * angleInc) + current.yaw;
+                    const lx = target.x + r * Math.sin(angle);
+                    const ly = target.y + r * Math.cos(angle);
                     
                     const p = worldToCanvas(lx, ly);
                     ctx.fillRect(p.x-1, p.y-1, 2, 2);
@@ -394,24 +399,19 @@
                     const pos = transform.transform.translation;
                     const rot = transform.transform.rotation;
                     
-                    // Update global UI state
-                    robotX = pos.x;
-                    robotY = pos.y;
+                    // Update target state for interpolation
+                    target.x = pos.x;
+                    target.y = pos.y;
+                    
                     const q = rot;
-                    robotYaw = Math.atan2(2 * (q.w * q.z + q.x * q.y), 1 - 2 * (q.y * q.y + q.z * q.z));
+                    target.yaw = Math.atan2(2 * (q.w * q.z + q.x * q.y), 1 - 2 * (q.y * q.y + q.z * q.z));
                     
-                    centerX = robotX;
-                    centerY = robotY;
-
-                    // Update DOM (Cartesian Pose - as requested, logic remains same)
-                    document.getElementById('pose-x').innerText = robotX.toFixed(3);
-                    document.getElementById('pose-y').innerText = robotY.toFixed(3);
-                    document.getElementById('pose-yaw').innerText = (robotYaw * 180 / Math.PI).toFixed(2);
+                    // Update DOM (Cartesian Pose - numeric values show raw data)
+                    document.getElementById('pose-x').innerText = target.x.toFixed(3);
+                    document.getElementById('pose-y').innerText = target.y.toFixed(3);
+                    document.getElementById('pose-yaw').innerText = (target.yaw * 180 / Math.PI).toFixed(2);
                     
-                    uiState.needsRedraw.grid = true;
-                    uiState.needsRedraw.map = true;
-                    uiState.needsRedraw.scan = true;
-                    uiState.needsRedraw.ui = true;
+                    uiState.needsRedraw.ui = true; // Still flag for immediate update if needed
                 }
             });
         });
@@ -458,11 +458,11 @@
             const ctx = ctxs.ui;
             ctx.clearRect(0,0, layers.ui.width, layers.ui.height);
             
-            const p = worldToCanvas(robotX, robotY);
+            const p = worldToCanvas(current.x, current.y);
             
             ctx.save();
             ctx.translate(p.x, p.y);
-            ctx.rotate(-robotYaw);
+            ctx.rotate(-current.yaw);
             
             ctx.fillStyle = '#000000';
             ctx.beginPath();
@@ -477,7 +477,26 @@
 
         // --- Animation Loop ---
         function renderLoop() {
-            if (uiState.needsRedraw.grid) {
+            // Smoothly interpolate current pose towards target
+            current.x += (target.x - current.x) * SMOOTH_FACTOR;
+            current.y += (target.y - current.y) * SMOOTH_FACTOR;
+            
+            // Yaw interpolation with wrap-around awareness
+            let dyaw = target.yaw - current.yaw;
+            while (dyaw > Math.PI) dyaw -= Math.PI * 2;
+            while (dyaw < -Math.PI) dyaw += Math.PI * 2;
+            current.yaw += dyaw * SMOOTH_FACTOR;
+
+            // Camera follows the smoothed robot
+            centerX = current.x;
+            centerY = current.y;
+
+            // Always redraw indicator and scan for maximum fluid motion
+            drawUI();
+            drawScan();
+
+            // Grid and Map only redraw on significant change or explicit flag
+            if (uiState.needsRedraw.grid || Math.abs(dyaw) > 0.001) {
                 drawGrid();
                 uiState.needsRedraw.grid = false;
             }
@@ -485,14 +504,7 @@
                 renderMap();
                 uiState.needsRedraw.map = false;
             }
-            if (uiState.needsRedraw.scan) {
-                drawScan();
-                uiState.needsRedraw.scan = false;
-            }
-            if (uiState.needsRedraw.ui) {
-                drawUI();
-                uiState.needsRedraw.ui = false;
-            }
+
             requestAnimationFrame(renderLoop);
         }
 

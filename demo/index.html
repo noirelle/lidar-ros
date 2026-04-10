@@ -250,7 +250,10 @@
         // --- UI State & Buffer ---
         const uiState = {
             latestScan: null,
-            occupiedPoints: [], // Store world coordinates of walls
+            scanWorldPoints: [], // Pre-calculated world coordinates
+            occupiedPoints: [], 
+            mapBuffer: document.createElement('canvas'),
+            mapInfo: null,
             needsRedraw: {
                 grid: true,
                 map: true,
@@ -290,8 +293,8 @@
             const dx = (x - centerX) * scale;
             const dy = (y - centerY) * scale;
             return {
-                x: Math.round((layers.grid.width / 2) + dx),
-                y: Math.round((layers.grid.height / 2) - dy)
+                x: (layers.grid.width / 2) + dx,
+                y: (layers.grid.height / 2) - dy
             };
         }
 
@@ -348,19 +351,8 @@
             document.getElementById('scan-hz').innerText = (1000 / (now - lastScanTime)).toFixed(2);
             lastScanTime = now;
 
-            uiState.latestScan = msg;
-            uiState.needsRedraw.scan = true;
-            uiState.needsRedraw.ui = true;
-        });
-
-        function drawScan() {
-            const msg = uiState.latestScan;
-            if (!msg) return;
-
-            const ctx = ctxs.scan;
-            ctx.clearRect(0, 0, layers.scan.width, layers.scan.height);
-            
-            ctx.fillStyle = '#000000';
+            // Cache world points immediately with current pose for stability
+            const points = [];
             const angleMin = msg.angle_min;
             const angleInc = msg.angle_increment;
 
@@ -368,13 +360,26 @@
                 const r = msg.ranges[i];
                 if (r > msg.range_min && r < msg.range_max) {
                     const angle = angleMin + (i * angleInc) + robotYaw;
-                    const lx = robotX + r * Math.sin(angle);
-                    const ly = robotY + r * Math.cos(angle);
-                    
-                    const p = worldToCanvas(lx, ly);
-                    ctx.fillRect(p.x-1, p.y-1, 2, 2);
+                    points.push({
+                        x: robotX + r * Math.sin(angle),
+                        y: robotY + r * Math.cos(angle)
+                    });
                 }
             }
+            uiState.scanWorldPoints = points;
+            uiState.needsRedraw.scan = true;
+            uiState.needsRedraw.ui = true;
+        });
+
+        function drawScan() {
+            const ctx = ctxs.scan;
+            ctx.clearRect(0, 0, layers.scan.width, layers.scan.height);
+            
+            ctx.fillStyle = '#000000';
+            uiState.scanWorldPoints.forEach(p => {
+                const canvasP = worldToCanvas(p.x, p.y);
+                ctx.fillRect(canvasP.x - 1, canvasP.y - 1, 2, 2);
+            });
         }
 
         // --- High-Priority Raw TF Telemetry ---
@@ -416,41 +421,57 @@
             });
         });
 
-        // --- Mapping (Unified Point Cloud Style) ---
+        // --- Mapping (Buffered Bit-blitting) ---
         const mapTopic = new ROSLIB.Topic({ ros: ros, name: '/map', messageType: 'nav_msgs/OccupancyGrid' });
 
         mapTopic.subscribe(msg => {
             const info = msg.info;
             const data = msg.data;
+            uiState.mapInfo = info;
             
             document.getElementById('map-size').innerText = 
                 (info.width * info.resolution).toFixed(1) + 'x' + (info.height * info.resolution).toFixed(1) + ' m';
 
-            // Extract occupied cells into a point list (Meters)
-            uiState.occupiedPoints = [];
+            // Resize and Render Map once to offscreen buffer
+            uiState.mapBuffer.width = info.width;
+            uiState.mapBuffer.height = info.height;
+            const mCtx = uiState.mapBuffer.getContext('2d');
+            mCtx.clearRect(0, 0, info.width, info.height);
+            
+            const imgData = mCtx.createImageData(info.width, info.height);
             for (let i = 0; i < data.length; i++) {
-                if (data[i] > 50) { // Occupancy threshold
-                    const x_idx = i % info.width;
-                    const y_idx = Math.floor(i / info.width);
-                    
-                    // Convert to map world space
-                    const wx = x_idx * info.resolution + info.origin.position.x;
-                    const wy = y_idx * info.resolution + info.origin.position.y;
-                    uiState.occupiedPoints.push({ x: wx, y: wy });
+                const val = data[i];
+                const idx = i * 4;
+                if (val > 50) { // Occupied
+                    imgData.data[idx] = 0;
+                    imgData.data[idx+1] = 0;
+                    imgData.data[idx+2] = 0;
+                    imgData.data[idx+3] = 100; // Alpha 0.4
+                } else {
+                    imgData.data[idx+3] = 0; // Transparent
                 }
             }
+            mCtx.putImageData(imgData, 0, 0);
             uiState.needsRedraw.map = true;
         });
 
         function renderMap() {
+            if (!uiState.mapInfo) return;
             const ctx = ctxs.map;
             ctx.clearRect(0,0, layers.map.width, layers.map.height);
             
-            ctx.fillStyle = 'rgba(0, 0, 0, 0.4)'; // Subtler color for built map
-            uiState.occupiedPoints.forEach(p => {
-                const canvasP = worldToCanvas(p.x, p.y);
-                ctx.fillRect(canvasP.x - 1, canvasP.y - 1, 2, 2);
-            });
+            const info = uiState.mapInfo;
+            const originW = info.origin.position.x;
+            const originH = info.origin.position.y;
+            
+            // Calculate canvas rect for the entire map buffer
+            const pStart = worldToCanvas(originW, originH + info.height * info.resolution);
+            const pEnd = worldToCanvas(originW + info.width * info.resolution, originH);
+            
+            ctx.drawImage(uiState.mapBuffer, 
+                pStart.x, pStart.y, 
+                pEnd.x - pStart.x, pEnd.y - pStart.y
+            );
         }
 
         // --- Robot Indicator (Minimalist Triangle) ---

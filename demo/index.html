@@ -247,6 +247,18 @@
         let centerX = 0, centerY = 0; 
         let robotX = 0, robotY = 0, robotYaw = 0;
 
+        // --- UI State & Buffer ---
+        const uiState = {
+            latestScan: null,
+            occupiedPoints: [], // Store world coordinates of walls
+            needsRedraw: {
+                grid: true,
+                map: true,
+                scan: false,
+                ui: false
+            }
+        };
+
         const container = document.getElementById('main-viewport');
         const layers = {
             grid: document.getElementById('gridLayer'),
@@ -330,10 +342,20 @@
         // --- Scan Logic (Black Points) ---
         const scanTopic = new ROSLIB.Topic({ ros: ros, name: '/scan', messageType: 'sensor_msgs/LaserScan' });
         let lastScanTime = Date.now();
+        
         scanTopic.subscribe(msg => {
             const now = Date.now();
             document.getElementById('scan-hz').innerText = (1000 / (now - lastScanTime)).toFixed(2);
             lastScanTime = now;
+
+            uiState.latestScan = msg;
+            uiState.needsRedraw.scan = true;
+            uiState.needsRedraw.ui = true;
+        });
+
+        function drawScan() {
+            const msg = uiState.latestScan;
+            if (!msg) return;
 
             const ctx = ctxs.scan;
             ctx.clearRect(0, 0, layers.scan.width, layers.scan.height);
@@ -353,8 +375,7 @@
                     ctx.fillRect(p.x-1, p.y-1, 2, 2);
                 }
             }
-            drawUI();
-        });
+        }
 
         // --- High-Priority Raw TF Telemetry ---
         const tfTopic = new ROSLIB.Topic({
@@ -382,20 +403,21 @@
                     centerX = robotX;
                     centerY = robotY;
 
-                    // Update DOM
+                    // Update DOM (Cartesian Pose - as requested, logic remains same)
                     document.getElementById('pose-x').innerText = robotX.toFixed(3);
                     document.getElementById('pose-y').innerText = robotY.toFixed(3);
                     document.getElementById('pose-yaw').innerText = (robotYaw * 180 / Math.PI).toFixed(2);
                     
-                    drawGrid();
-                    renderMap();
+                    uiState.needsRedraw.grid = true;
+                    uiState.needsRedraw.map = true;
+                    uiState.needsRedraw.scan = true;
+                    uiState.needsRedraw.ui = true;
                 }
             });
         });
 
         // --- Mapping (Unified Point Cloud Style) ---
         const mapTopic = new ROSLIB.Topic({ ros: ros, name: '/map', messageType: 'nav_msgs/OccupancyGrid' });
-        let occupiedPoints = []; // Store world coordinates of walls
 
         mapTopic.subscribe(msg => {
             const info = msg.info;
@@ -405,7 +427,7 @@
                 (info.width * info.resolution).toFixed(1) + 'x' + (info.height * info.resolution).toFixed(1) + ' m';
 
             // Extract occupied cells into a point list (Meters)
-            occupiedPoints = [];
+            uiState.occupiedPoints = [];
             for (let i = 0; i < data.length; i++) {
                 if (data[i] > 50) { // Occupancy threshold
                     const x_idx = i % info.width;
@@ -414,10 +436,10 @@
                     // Convert to map world space
                     const wx = x_idx * info.resolution + info.origin.position.x;
                     const wy = y_idx * info.resolution + info.origin.position.y;
-                    occupiedPoints.push({ x: wx, y: wy });
+                    uiState.occupiedPoints.push({ x: wx, y: wy });
                 }
             }
-            renderMap();
+            uiState.needsRedraw.map = true;
         });
 
         function renderMap() {
@@ -425,7 +447,7 @@
             ctx.clearRect(0,0, layers.map.width, layers.map.height);
             
             ctx.fillStyle = 'rgba(0, 0, 0, 0.4)'; // Subtler color for built map
-            occupiedPoints.forEach(p => {
+            uiState.occupiedPoints.forEach(p => {
                 const canvasP = worldToCanvas(p.x, p.y);
                 ctx.fillRect(canvasP.x - 1, canvasP.y - 1, 2, 2);
             });
@@ -453,13 +475,40 @@
             ctx.restore();
         }
 
+        // --- Animation Loop ---
+        function renderLoop() {
+            if (uiState.needsRedraw.grid) {
+                drawGrid();
+                uiState.needsRedraw.grid = false;
+            }
+            if (uiState.needsRedraw.map) {
+                renderMap();
+                uiState.needsRedraw.map = false;
+            }
+            if (uiState.needsRedraw.scan) {
+                drawScan();
+                uiState.needsRedraw.scan = false;
+            }
+            if (uiState.needsRedraw.ui) {
+                drawUI();
+                uiState.needsRedraw.ui = false;
+            }
+            requestAnimationFrame(renderLoop);
+        }
+
+        // Start render loop
+        requestAnimationFrame(renderLoop);
+
         // --- Interaction ---
         container.addEventListener('wheel', (e) => {
             e.preventDefault();
             if (e.deltaY < 0) zoom = Math.max(1, zoom * 0.9);
             else zoom = Math.min(100, zoom * 1.1);
             document.getElementById('zoom-text').innerText = zoom.toFixed(1) + 'm';
-            drawGrid();
+            uiState.needsRedraw.grid = true;
+            uiState.needsRedraw.map = true;
+            uiState.needsRedraw.scan = true;
+            uiState.needsRedraw.ui = true;
         });
     </script>
 </body>
